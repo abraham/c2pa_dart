@@ -1,0 +1,31 @@
+name: c2pa_codec
+description: Deterministic CBOR, COSE structures, ISO boxes, and JUMBF for C2PA.
+version: 0.1.0-dev.1
+repository: https://github.com/abraham/c2pa_dart/tree/main/packages/c2pa_codec
+issue_tracker: https://github.com/abraham/c2pa_dart/issues
+
+environment:
+  sdk: ^3.13.0
+
+resolution: workspace
+
+topics:
+  - c2pa
+  - cbor
+  - cose
+  - iso-bmff
+  - jumbf
+
+platforms:
+  android:
+  ios:
+  linux:
+  macos:
+  web:
+  windows:
+
+dependencies:
+  c2pa_io: ^0.1.0-dev.1
+
+dev_dependencies:
+  test: ^1.26.3

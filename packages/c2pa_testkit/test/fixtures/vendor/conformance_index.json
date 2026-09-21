@@ -1,0 +1,847 @@
+{
+  "schemaVersion": 1,
+  "fixtures": [
+    {
+      "id": "public-v1-jpeg",
+      "asset": "c2pa-public-testfiles/claim-v1/jpeg/adobe-20220124-CA.jpg",
+      "source": {
+        "url": "https://github.com/c2pa-org/public-testfiles/blob/22beccc075707475b038d8789d0136c009e43143/legacy/1.4/image/jpeg/adobe-20220124-CA.jpg",
+        "license": "CC-BY-SA-4.0",
+        "attribution": "https://github.com/c2pa-org/public-testfiles@22beccc075707475b038d8789d0136c009e43143"
+      },
+      "metadata": {
+        "expected": "parse-success-claim-v1-one-parent-ingredient",
+        "sha256": "cafc48c53e651f7ba4622d1f72783827074211e42b9634cc863ec3be3c7651b3",
+        "size": 178709
+      }
+    },
+    {
+      "id": "rust-ca-jpeg",
+      "asset": "c2pa-rs-0.90.22/media/claim-v2/CA.jpg",
+      "source": {
+        "url": "https://github.com/contentauth/c2pa-rs/blob/c2pa-v0.90.22/sdk/tests/fixtures/CA.jpg",
+        "license": "MIT OR Apache-2.0",
+        "attribution": "https://github.com/contentauth/c2pa-rs@1a56d244ee77d7e58221eabebede4281d9e868a4"
+      },
+      "metadata": {
+        "expected": "parse-claim-v1-valid-signature-untrusted-default",
+        "relatedAssets": [
+          "c2pa-rs-0.90.22/media/claim-v2/CA.expected.json",
+          "c2pa-rs-0.90.22/crjson/crJSON-schema.json"
+        ],
+        "sha256": "e71bff58fc57640803e6e65f7534e2fb0c2f99018c85276cc14b30f04427cc76",
+        "size": 166864
+      }
+    },
+    {
+      "id": "rust-invalid-datahash-jpeg",
+      "asset": "c2pa-rs-0.90.22/media/invalid/XCA.jpg",
+      "source": {
+        "url": "https://github.com/contentauth/c2pa-rs/blob/c2pa-v0.90.22/sdk/tests/fixtures/XCA.jpg",
+        "license": "MIT OR Apache-2.0",
+        "attribution": "https://github.com/contentauth/c2pa-rs@1a56d244ee77d7e58221eabebede4281d9e868a4"
+      },
+      "metadata": {
+        "expected": "assertion.dataHash.mismatch",
+        "relatedAssets": [
+          "c2pa-rs-0.90.22/media/invalid/XCA.expected.json"
+        ],
+        "sha256": "81f20702a2e81611b29aa773f811b59ade6095acd3d089d6ffdae6b591d6d5a5",
+        "size": 142765
+      }
+    },
+    {
+      "id": "rust-malformed-timestamp-jpeg",
+      "asset": "c2pa-rs-0.90.22/media/invalid/CA_ct.jpg",
+      "source": {
+        "url": "https://github.com/contentauth/c2pa-rs/blob/c2pa-v0.90.22/sdk/tests/fixtures/CA_ct.jpg",
+        "license": "MIT OR Apache-2.0",
+        "attribution": "https://github.com/contentauth/c2pa-rs@1a56d244ee77d7e58221eabebede4281d9e868a4"
+      },
+      "metadata": {
+        "expected": "timestamp.malformed-informational",
+        "sha256": "e7d6cb48303593c0a34de44aadf9b6f4386a8b263c74e76b6c19ea97eb87e853",
+        "size": 166864
+      }
+    },
+    {
+      "id": "rust-embedded-png",
+      "asset": "c2pa-rs-0.90.22/media/png/exp-test1.png",
+      "source": {
+        "url": "https://github.com/contentauth/c2pa-rs/blob/c2pa-v0.90.22/sdk/tests/fixtures/exp-test1.png",
+        "license": "MIT OR Apache-2.0",
+        "attribution": "https://github.com/contentauth/c2pa-rs@1a56d244ee77d7e58221eabebede4281d9e868a4"
+      },
+      "metadata": {
+        "expected": "extract-nonempty-manifest",
+        "sha256": "8794b09652ab0585b9337f9c85981407ee297eda20f5885964057fca59648bd3",
+        "size": 5884439
+      }
+    },
+    {
+      "id": "rust-embedded-bmff",
+      "asset": "c2pa-rs-0.90.22/media/bmff/video1.mp4",
+      "source": {
+        "url": "https://github.com/contentauth/c2pa-rs/blob/c2pa-v0.90.22/sdk/tests/fixtures/video1.mp4",
+        "license": "MIT OR Apache-2.0",
+        "attribution": "https://github.com/contentauth/c2pa-rs@1a56d244ee77d7e58221eabebede4281d9e868a4"
+      },
+      "metadata": {
+        "expected": "extract-nonempty-manifest",
+        "sha256": "b310ba339ca89950e3c921754566d5e44ef52c45dd1ddbbfe1383c8e7761cfd0",
+        "size": 828571
+      }
+    },
+    {
+      "id": "rust-clean-zip",
+      "asset": "c2pa-rs-0.90.22/media/zip/sample1.zip",
+      "skipReason": "The Dart SDK does not expose c2pa-rs Builder archive serialization APIs.",
+      "source": {
+        "url": "https://github.com/contentauth/c2pa-rs/blob/c2pa-v0.90.22/sdk/tests/fixtures/sample1.zip",
+        "license": "MIT OR Apache-2.0",
+        "attribution": "https://github.com/contentauth/c2pa-rs@1a56d244ee77d7e58221eabebede4281d9e868a4"
+      },
+      "metadata": {
+        "expected": "no-manifest-write-read-roundtrip",
+        "issueCategory": "unsupported-builder-archive",
+        "sha256": "15a48bcacda9ee02b5d21c4b97c205a52bae3f7f65b07692df9e96097540a71f",
+        "size": 1096
+      }
+    },
+    {
+      "id": "rust-legacy-builder-archive",
+      "asset": "c2pa-rs-0.90.22/media/zip/old_format_archive.zip",
+      "skipReason": "The Dart SDK does not expose c2pa-rs Builder archive deserialization APIs.",
+      "source": {
+        "url": "https://github.com/contentauth/c2pa-rs/blob/c2pa-v0.90.22/sdk/tests/fixtures/old_format_archive.zip",
+        "license": "MIT OR Apache-2.0",
+        "attribution": "https://github.com/contentauth/c2pa-rs@1a56d244ee77d7e58221eabebede4281d9e868a4"
+      },
+      "metadata": {
+        "expected": "legacy-archive-readable",
+        "issueCategory": "unsupported-builder-archive",
+        "sha256": "413cbe55cac4511d2027cc2bbd912be237eaf3a3b7a0b20d28bcb76580f972df",
+        "size": 620
+      }
+    },
+    {
+      "id": "rust-hostile-builder-archive",
+      "asset": "c2pa-rs-0.90.22/media/zip/bad_path_archive.zip",
+      "skipReason": "The Dart SDK does not expose c2pa-rs Builder archive deserialization APIs.",
+      "source": {
+        "url": "https://github.com/contentauth/c2pa-rs/blob/c2pa-v0.90.22/sdk/tests/fixtures/bad_path_archive.zip",
+        "license": "MIT OR Apache-2.0",
+        "attribution": "https://github.com/contentauth/c2pa-rs@1a56d244ee77d7e58221eabebede4281d9e868a4"
+      },
+      "metadata": {
+        "expected": "reject-serialized-absolute-base-path",
+        "issueCategory": "unsupported-builder-archive",
+        "sha256": "1dd4a05ddd916641fdda52217476da59f484cd75c9cd1d3d35ce713c98c6f4bd",
+        "size": 542
+      }
+    },
+    {
+      "id": "rust-nested-bmff",
+      "asset": "c2pa-rs-0.90.22/media/malformed/nested_moov_1000.mp4",
+      "source": {
+        "url": "https://github.com/contentauth/c2pa-rs/blob/c2pa-v0.90.22/sdk/tests/fixtures/nested_moov_1000.mp4",
+        "license": "MIT OR Apache-2.0",
+        "attribution": "https://github.com/contentauth/c2pa-rs@1a56d244ee77d7e58221eabebede4281d9e868a4"
+      },
+      "metadata": {
+        "expected": "controlled-parse-error",
+        "sha256": "c65939dc21f17d04f419e68d8f0fe3b82eb4f881af9d9fc2e00d5bb92b249978",
+        "size": 8041
+      }
+    },
+    {
+      "id": "rust-id3-underflow",
+      "asset": "c2pa-rs-0.90.22/media/malformed/id3v23_compression_underflow.mp3",
+      "source": {
+        "url": "https://github.com/contentauth/c2pa-rs/blob/c2pa-v0.90.22/sdk/tests/fixtures/id3v23_compression_underflow.mp3",
+        "license": "MIT OR Apache-2.0",
+        "attribution": "https://github.com/contentauth/c2pa-rs@1a56d244ee77d7e58221eabebede4281d9e868a4"
+      },
+      "metadata": {
+        "expected": "no-crash-manifest-not-found",
+        "sha256": "e7d9bfb1b4454a1de0d7ff1d1c0480bbf00e2d377bc735160a4b1161f61d3268",
+        "size": 445
+      }
+    },
+    {
+      "id": "rust-ocsp-good",
+      "asset": "c2pa-rs-0.90.22/crypto/ocsp/response_good.der",
+      "source": {
+        "url": "https://github.com/contentauth/c2pa-rs/blob/c2pa-v0.90.22/sdk/tests/fixtures/crypto/ocsp/response_good.der",
+        "license": "MIT OR Apache-2.0",
+        "attribution": "https://github.com/contentauth/c2pa-rs@1a56d244ee77d7e58221eabebede4281d9e868a4"
+      },
+      "metadata": {
+        "expected": "signingCredential.ocsp.notRevoked",
+        "relatedAssets": [
+          "c2pa-rs-0.90.22/crypto/ocsp/ocsp_chain.pem"
+        ],
+        "sha256": "6ee9bdf10daa9505e7f2931431d19f9063182e8a63c43af7e548579b865b9128",
+        "size": 1299
+      }
+    },
+    {
+      "id": "rust-ocsp-revoked",
+      "asset": "c2pa-rs-0.90.22/crypto/ocsp/response_revoked.der",
+      "source": {
+        "url": "https://github.com/contentauth/c2pa-rs/blob/c2pa-v0.90.22/sdk/tests/fixtures/crypto/ocsp/response_revoked.der",
+        "license": "MIT OR Apache-2.0",
+        "attribution": "https://github.com/contentauth/c2pa-rs@1a56d244ee77d7e58221eabebede4281d9e868a4"
+      },
+      "metadata": {
+        "expected": "signingCredential.revoked",
+        "sha256": "988362161a258d551aad72a1992b6a1577418188df734aa7ac0ab721107fde97",
+        "size": 1317
+      }
+    },
+    {
+      "id": "rust-ocsp-unknown",
+      "asset": "c2pa-rs-0.90.22/crypto/ocsp/response_unknown.der",
+      "source": {
+        "url": "https://github.com/contentauth/c2pa-rs/blob/c2pa-v0.90.22/sdk/tests/fixtures/crypto/ocsp/response_unknown.der",
+        "license": "MIT OR Apache-2.0",
+        "attribution": "https://github.com/contentauth/c2pa-rs@1a56d244ee77d7e58221eabebede4281d9e868a4"
+      },
+      "metadata": {
+        "expected": "signingCredential.ocsp.unknown",
+        "sha256": "86ccc3ba1ac9db6a1b52bd0bc78a5d0bf7c5377477cedc529ba063c54088704f",
+        "size": 1299
+      }
+    },
+    {
+      "id": "rust-cawg-x509-duplicate-assertion-reference",
+      "asset": "c2pa-rs-0.90.22/identity/validation_method/duplicate_assertion_reference.jpg",
+      "source": {
+        "url": "https://github.com/contentauth/c2pa-rs/blob/1a56d244ee77d7e58221eabebede4281d9e868a4/sdk/src/identity/tests/fixtures/validation_method/duplicate_assertion_reference.jpg",
+        "license": "MIT OR Apache-2.0",
+        "attribution": "https://github.com/contentauth/c2pa-rs@1a56d244ee77d7e58221eabebede4281d9e868a4"
+      },
+      "metadata": {
+        "suite": "cawg-x509-validation",
+        "sha256": "4618ccc60c20484ec5d9f06719128f8fe978a59e17e0ab1af730d12310e97a74",
+        "size": 252940,
+        "c2paRsExpectedStatuses": [
+          "cawg.identity.assertion.duplicate",
+          "signingCredential.trusted"
+        ]
+      }
+    },
+    {
+      "id": "rust-cawg-x509-extra-assertion-claim-v1",
+      "asset": "c2pa-rs-0.90.22/identity/validation_method/extra_assertion_claim_v1.jpg",
+      "source": {
+        "url": "https://github.com/contentauth/c2pa-rs/blob/1a56d244ee77d7e58221eabebede4281d9e868a4/sdk/src/identity/tests/fixtures/validation_method/extra_assertion_claim_v1.jpg",
+        "license": "MIT OR Apache-2.0",
+        "attribution": "https://github.com/contentauth/c2pa-rs@1a56d244ee77d7e58221eabebede4281d9e868a4"
+      },
+      "metadata": {
+        "suite": "cawg-x509-validation",
+        "sha256": "779373cab76f78f47de111e256553553873e5a5e5576254666a96b9d76ece49f",
+        "size": 252940,
+        "c2paRsExpectedStatuses": [
+          "cawg.identity.assertion.mismatch",
+          "signingCredential.trusted"
+        ]
+      }
+    },
+    {
+      "id": "rust-cawg-x509-extra-field",
+      "asset": "c2pa-rs-0.90.22/identity/validation_method/extra_field.jpg",
+      "source": {
+        "url": "https://github.com/contentauth/c2pa-rs/blob/1a56d244ee77d7e58221eabebede4281d9e868a4/sdk/src/identity/tests/fixtures/validation_method/extra_field.jpg",
+        "license": "MIT OR Apache-2.0",
+        "attribution": "https://github.com/contentauth/c2pa-rs@1a56d244ee77d7e58221eabebede4281d9e868a4"
+      },
+      "metadata": {
+        "suite": "cawg-x509-validation",
+        "sha256": "e62265aa94dc71aaff10224356d868d6958208f47ddc73f271aaa1a01ecaf0a5",
+        "size": 252940,
+        "c2paRsExpectedStatuses": []
+      }
+    },
+    {
+      "id": "rust-cawg-x509-invalid-sig-type",
+      "asset": "c2pa-rs-0.90.22/identity/validation_method/invalid_sig_type.jpg",
+      "source": {
+        "url": "https://github.com/contentauth/c2pa-rs/blob/1a56d244ee77d7e58221eabebede4281d9e868a4/sdk/src/identity/tests/fixtures/validation_method/invalid_sig_type.jpg",
+        "license": "MIT OR Apache-2.0",
+        "attribution": "https://github.com/contentauth/c2pa-rs@1a56d244ee77d7e58221eabebede4281d9e868a4"
+      },
+      "metadata": {
+        "suite": "cawg-x509-validation",
+        "sha256": "bb80fe6433aef04513624e65b5edfdfa98171998cfa7930370dd2b1127129856",
+        "size": 242914,
+        "c2paRsExpectedStatuses": [
+          "cawg.identity.sig_type.unknown"
+        ]
+      }
+    },
+    {
+      "id": "rust-cawg-x509-malformed-cbor",
+      "asset": "c2pa-rs-0.90.22/identity/validation_method/malformed_cbor.jpg",
+      "source": {
+        "url": "https://github.com/contentauth/c2pa-rs/blob/1a56d244ee77d7e58221eabebede4281d9e868a4/sdk/src/identity/tests/fixtures/validation_method/malformed_cbor.jpg",
+        "license": "MIT OR Apache-2.0",
+        "attribution": "https://github.com/contentauth/c2pa-rs@1a56d244ee77d7e58221eabebede4281d9e868a4"
+      },
+      "metadata": {
+        "suite": "cawg-x509-validation",
+        "sha256": "4627a6c6461b718ad2dc4d99e2a12051e44a79f5fd3e13c90e7206549f06289a",
+        "size": 252940,
+        "c2paRsExpectedStatuses": [
+          "cawg.identity.cbor.invalid"
+        ]
+      }
+    },
+    {
+      "id": "rust-cawg-x509-no-hard-binding",
+      "asset": "c2pa-rs-0.90.22/identity/validation_method/no_hard_binding.jpg",
+      "source": {
+        "url": "https://github.com/contentauth/c2pa-rs/blob/1a56d244ee77d7e58221eabebede4281d9e868a4/sdk/src/identity/tests/fixtures/validation_method/no_hard_binding.jpg",
+        "license": "MIT OR Apache-2.0",
+        "attribution": "https://github.com/contentauth/c2pa-rs@1a56d244ee77d7e58221eabebede4281d9e868a4"
+      },
+      "metadata": {
+        "suite": "cawg-x509-validation",
+        "sha256": "2e6b5fc080aac1054f4009bb5d600b5e022f996c54ff7bad5f40cc45223c100a",
+        "size": 252940,
+        "c2paRsExpectedStatuses": [
+          "cawg.identity.hard_binding_missing",
+          "signingCredential.trusted"
+        ]
+      }
+    },
+    {
+      "id": "rust-cawg-x509-pad1-invalid",
+      "asset": "c2pa-rs-0.90.22/identity/validation_method/pad1_invalid.jpg",
+      "source": {
+        "url": "https://github.com/contentauth/c2pa-rs/blob/1a56d244ee77d7e58221eabebede4281d9e868a4/sdk/src/identity/tests/fixtures/validation_method/pad1_invalid.jpg",
+        "license": "MIT OR Apache-2.0",
+        "attribution": "https://github.com/contentauth/c2pa-rs@1a56d244ee77d7e58221eabebede4281d9e868a4"
+      },
+      "metadata": {
+        "suite": "cawg-x509-validation",
+        "sha256": "9f3cde5006a0096c51f64c153741b9c4802535e9f8d526267cbe8bb79fc1ede8",
+        "size": 252940,
+        "c2paRsExpectedStatuses": [
+          "cawg.identity.pad.invalid",
+          "signingCredential.trusted"
+        ]
+      }
+    },
+    {
+      "id": "rust-cawg-x509-pad2-invalid",
+      "asset": "c2pa-rs-0.90.22/identity/validation_method/pad2_invalid.jpg",
+      "source": {
+        "url": "https://github.com/contentauth/c2pa-rs/blob/1a56d244ee77d7e58221eabebede4281d9e868a4/sdk/src/identity/tests/fixtures/validation_method/pad2_invalid.jpg",
+        "license": "MIT OR Apache-2.0",
+        "attribution": "https://github.com/contentauth/c2pa-rs@1a56d244ee77d7e58221eabebede4281d9e868a4"
+      },
+      "metadata": {
+        "suite": "cawg-x509-validation",
+        "sha256": "f27884ffaaf1890a4c5649deb5035f5c3a7d16f53db40aa65e5a2ec6535b65d8",
+        "size": 252940,
+        "c2paRsExpectedStatuses": [
+          "cawg.identity.pad.invalid",
+          "signingCredential.trusted"
+        ]
+      }
+    },
+    {
+      "id": "rust-cawg-ica-did-doc-without-assertion-method",
+      "asset": "c2pa-rs-0.90.22/identity/claim_aggregation/ica_validation/did_doc_without_assertion_method.jpg",
+      "source": {
+        "url": "https://github.com/contentauth/c2pa-rs/blob/1a56d244ee77d7e58221eabebede4281d9e868a4/sdk/src/identity/tests/fixtures/claim_aggregation/ica_validation/did_doc_without_assertion_method.jpg",
+        "license": "MIT OR Apache-2.0",
+        "attribution": "https://github.com/contentauth/c2pa-rs@1a56d244ee77d7e58221eabebede4281d9e868a4"
+      },
+      "metadata": {
+        "suite": "cawg-ica-validation",
+        "sha256": "62d02b5ba1348156b2b1c01ef47c5e346e66ba73828282c41535f35efc414756",
+        "size": 258982,
+        "c2paRsExpectedStatuses": [
+          "cawg.ica.invalid_did_document"
+        ]
+      }
+    },
+    {
+      "id": "rust-cawg-ica-invalid-content-type",
+      "asset": "c2pa-rs-0.90.22/identity/claim_aggregation/ica_validation/invalid_content_type.jpg",
+      "source": {
+        "url": "https://github.com/contentauth/c2pa-rs/blob/1a56d244ee77d7e58221eabebede4281d9e868a4/sdk/src/identity/tests/fixtures/claim_aggregation/ica_validation/invalid_content_type.jpg",
+        "license": "MIT OR Apache-2.0",
+        "attribution": "https://github.com/contentauth/c2pa-rs@1a56d244ee77d7e58221eabebede4281d9e868a4"
+      },
+      "metadata": {
+        "suite": "cawg-ica-validation",
+        "sha256": "86ccbecac9563b8868061367804bb87bc4f17d4ede1c48987852e5d4efaf176e",
+        "size": 258982,
+        "c2paRsExpectedStatuses": [
+          "cawg.ica.invalid_content_type"
+        ]
+      }
+    },
+    {
+      "id": "rust-cawg-ica-invalid-content-type-assigned",
+      "asset": "c2pa-rs-0.90.22/identity/claim_aggregation/ica_validation/invalid_content_type_assigned.jpg",
+      "source": {
+        "url": "https://github.com/contentauth/c2pa-rs/blob/1a56d244ee77d7e58221eabebede4281d9e868a4/sdk/src/identity/tests/fixtures/claim_aggregation/ica_validation/invalid_content_type_assigned.jpg",
+        "license": "MIT OR Apache-2.0",
+        "attribution": "https://github.com/contentauth/c2pa-rs@1a56d244ee77d7e58221eabebede4281d9e868a4"
+      },
+      "metadata": {
+        "suite": "cawg-ica-validation",
+        "sha256": "0db4d9a958026a1099c9d24af53f20c49a1910e12b445c474318da1c87d8e1ec",
+        "size": 258982,
+        "c2paRsExpectedStatuses": [
+          "cawg.ica.invalid_content_type"
+        ]
+      }
+    },
+    {
+      "id": "rust-cawg-ica-invalid-cose-sign1",
+      "asset": "c2pa-rs-0.90.22/identity/claim_aggregation/ica_validation/invalid_cose_sign1.jpg",
+      "source": {
+        "url": "https://github.com/contentauth/c2pa-rs/blob/1a56d244ee77d7e58221eabebede4281d9e868a4/sdk/src/identity/tests/fixtures/claim_aggregation/ica_validation/invalid_cose_sign1.jpg",
+        "license": "MIT OR Apache-2.0",
+        "attribution": "https://github.com/contentauth/c2pa-rs@1a56d244ee77d7e58221eabebede4281d9e868a4"
+      },
+      "metadata": {
+        "suite": "cawg-ica-validation",
+        "sha256": "7db45e41c19ef648372cb5c496b204d9d737199baa863df6ae45fdfcdecc0c89",
+        "size": 258982,
+        "c2paRsExpectedStatuses": [
+          "cawg.ica.invalid_cose_sign1"
+        ]
+      }
+    },
+    {
+      "id": "rust-cawg-ica-invalid-cose-sign-alg",
+      "asset": "c2pa-rs-0.90.22/identity/claim_aggregation/ica_validation/invalid_cose_sign_alg.jpg",
+      "source": {
+        "url": "https://github.com/contentauth/c2pa-rs/blob/1a56d244ee77d7e58221eabebede4281d9e868a4/sdk/src/identity/tests/fixtures/claim_aggregation/ica_validation/invalid_cose_sign_alg.jpg",
+        "license": "MIT OR Apache-2.0",
+        "attribution": "https://github.com/contentauth/c2pa-rs@1a56d244ee77d7e58221eabebede4281d9e868a4"
+      },
+      "metadata": {
+        "suite": "cawg-ica-validation",
+        "sha256": "35e76a42b63371cceefc055b32ea7f5b6ad7076c2af00b0295d3c3f90fe55dca",
+        "size": 258982,
+        "c2paRsExpectedStatuses": [
+          "cawg.ica.invalid_alg"
+        ]
+      }
+    },
+    {
+      "id": "rust-cawg-ica-invalid-issuer-did",
+      "asset": "c2pa-rs-0.90.22/identity/claim_aggregation/ica_validation/invalid_issuer_did.jpg",
+      "source": {
+        "url": "https://github.com/contentauth/c2pa-rs/blob/1a56d244ee77d7e58221eabebede4281d9e868a4/sdk/src/identity/tests/fixtures/claim_aggregation/ica_validation/invalid_issuer_did.jpg",
+        "license": "MIT OR Apache-2.0",
+        "attribution": "https://github.com/contentauth/c2pa-rs@1a56d244ee77d7e58221eabebede4281d9e868a4"
+      },
+      "metadata": {
+        "suite": "cawg-ica-validation",
+        "sha256": "ecabe580fff6f9d32e8042207134979f862cd5a48bddc71b60f5e47d316a734b",
+        "size": 258982,
+        "c2paRsExpectedStatuses": [
+          "cawg.ica.invalid_issuer"
+        ]
+      }
+    },
+    {
+      "id": "rust-cawg-ica-invalid-time-stamp",
+      "asset": "c2pa-rs-0.90.22/identity/claim_aggregation/ica_validation/invalid_time_stamp.jpg",
+      "source": {
+        "url": "https://github.com/contentauth/c2pa-rs/blob/1a56d244ee77d7e58221eabebede4281d9e868a4/sdk/src/identity/tests/fixtures/claim_aggregation/ica_validation/invalid_time_stamp.jpg",
+        "license": "MIT OR Apache-2.0",
+        "attribution": "https://github.com/contentauth/c2pa-rs@1a56d244ee77d7e58221eabebede4281d9e868a4"
+      },
+      "metadata": {
+        "suite": "cawg-ica-validation",
+        "sha256": "98a0e8edb1e7b57fcddaae0ecb24ecccbaf65ae3e5ac7308ca5dc1b922e4d561",
+        "size": 258982,
+        "c2paRsExpectedStatuses": [
+          "cawg.ica.time_stamp.invalid"
+        ]
+      }
+    },
+    {
+      "id": "rust-cawg-ica-invalid-vc",
+      "asset": "c2pa-rs-0.90.22/identity/claim_aggregation/ica_validation/invalid_vc.jpg",
+      "source": {
+        "url": "https://github.com/contentauth/c2pa-rs/blob/1a56d244ee77d7e58221eabebede4281d9e868a4/sdk/src/identity/tests/fixtures/claim_aggregation/ica_validation/invalid_vc.jpg",
+        "license": "MIT OR Apache-2.0",
+        "attribution": "https://github.com/contentauth/c2pa-rs@1a56d244ee77d7e58221eabebede4281d9e868a4"
+      },
+      "metadata": {
+        "suite": "cawg-ica-validation",
+        "sha256": "e9eddaa511064d133f592d5ba394e52040bdde95190fd04d3ad6a2661b765471",
+        "size": 258982,
+        "c2paRsExpectedStatuses": [
+          "cawg.ica.invalid_verifiable_credential"
+        ]
+      }
+    },
+    {
+      "id": "rust-cawg-ica-missing-content-type",
+      "asset": "c2pa-rs-0.90.22/identity/claim_aggregation/ica_validation/missing_content_type.jpg",
+      "source": {
+        "url": "https://github.com/contentauth/c2pa-rs/blob/1a56d244ee77d7e58221eabebede4281d9e868a4/sdk/src/identity/tests/fixtures/claim_aggregation/ica_validation/missing_content_type.jpg",
+        "license": "MIT OR Apache-2.0",
+        "attribution": "https://github.com/contentauth/c2pa-rs@1a56d244ee77d7e58221eabebede4281d9e868a4"
+      },
+      "metadata": {
+        "suite": "cawg-ica-validation",
+        "sha256": "2c987e06d1aab829d280a50b6aba0547e6b4989bf71f600d7d81b66699d199ab",
+        "size": 258982,
+        "c2paRsExpectedStatuses": [
+          "cawg.ica.invalid_content_type"
+        ]
+      }
+    },
+    {
+      "id": "rust-cawg-ica-missing-cose-sign-alg",
+      "asset": "c2pa-rs-0.90.22/identity/claim_aggregation/ica_validation/missing_cose_sign_alg.jpg",
+      "source": {
+        "url": "https://github.com/contentauth/c2pa-rs/blob/1a56d244ee77d7e58221eabebede4281d9e868a4/sdk/src/identity/tests/fixtures/claim_aggregation/ica_validation/missing_cose_sign_alg.jpg",
+        "license": "MIT OR Apache-2.0",
+        "attribution": "https://github.com/contentauth/c2pa-rs@1a56d244ee77d7e58221eabebede4281d9e868a4"
+      },
+      "metadata": {
+        "suite": "cawg-ica-validation",
+        "sha256": "02cbb8ebfb56a11d566917cb43e077a0e3f66c63fc7dcccc5c46634d3dae194b",
+        "size": 258982,
+        "c2paRsExpectedStatuses": [
+          "cawg.ica.invalid_alg"
+        ]
+      }
+    },
+    {
+      "id": "rust-cawg-ica-missing-vc",
+      "asset": "c2pa-rs-0.90.22/identity/claim_aggregation/ica_validation/missing_vc.jpg",
+      "source": {
+        "url": "https://github.com/contentauth/c2pa-rs/blob/1a56d244ee77d7e58221eabebede4281d9e868a4/sdk/src/identity/tests/fixtures/claim_aggregation/ica_validation/missing_vc.jpg",
+        "license": "MIT OR Apache-2.0",
+        "attribution": "https://github.com/contentauth/c2pa-rs@1a56d244ee77d7e58221eabebede4281d9e868a4"
+      },
+      "metadata": {
+        "suite": "cawg-ica-validation",
+        "sha256": "5f7c4ff0a1ade29f023c066b20f67a4e46a54a9286911874cabfa68f6b44c6af",
+        "size": 258982,
+        "c2paRsExpectedStatuses": [
+          "cawg.ica.invalid_verifiable_credential"
+        ]
+      }
+    },
+    {
+      "id": "rust-cawg-ica-signature-mismatch",
+      "asset": "c2pa-rs-0.90.22/identity/claim_aggregation/ica_validation/signature_mismatch.jpg",
+      "source": {
+        "url": "https://github.com/contentauth/c2pa-rs/blob/1a56d244ee77d7e58221eabebede4281d9e868a4/sdk/src/identity/tests/fixtures/claim_aggregation/ica_validation/signature_mismatch.jpg",
+        "license": "MIT OR Apache-2.0",
+        "attribution": "https://github.com/contentauth/c2pa-rs@1a56d244ee77d7e58221eabebede4281d9e868a4"
+      },
+      "metadata": {
+        "suite": "cawg-ica-validation",
+        "sha256": "74d975b3b6b0a21498fddc8984cd4c56d5409fbf0059131d95d52564c45610a7",
+        "size": 258982,
+        "c2paRsExpectedStatuses": [
+          "cawg.ica.signature_mismatch"
+        ]
+      }
+    },
+    {
+      "id": "rust-cawg-ica-signer-payload-mismatch",
+      "asset": "c2pa-rs-0.90.22/identity/claim_aggregation/ica_validation/signer_payload_mismatch.jpg",
+      "source": {
+        "url": "https://github.com/contentauth/c2pa-rs/blob/1a56d244ee77d7e58221eabebede4281d9e868a4/sdk/src/identity/tests/fixtures/claim_aggregation/ica_validation/signer_payload_mismatch.jpg",
+        "license": "MIT OR Apache-2.0",
+        "attribution": "https://github.com/contentauth/c2pa-rs@1a56d244ee77d7e58221eabebede4281d9e868a4"
+      },
+      "metadata": {
+        "suite": "cawg-ica-validation",
+        "sha256": "43cb3adcce666f1ab09c04be48332bbfdca6acc33aaf011a7620923c1b413e82",
+        "size": 258982,
+        "c2paRsExpectedStatuses": [
+          "cawg.ica.signer_payload.mismatch"
+        ]
+      }
+    },
+    {
+      "id": "rust-cawg-ica-success",
+      "asset": "c2pa-rs-0.90.22/identity/claim_aggregation/ica_validation/success.jpg",
+      "source": {
+        "url": "https://github.com/contentauth/c2pa-rs/blob/1a56d244ee77d7e58221eabebede4281d9e868a4/sdk/src/identity/tests/fixtures/claim_aggregation/ica_validation/success.jpg",
+        "license": "MIT OR Apache-2.0",
+        "attribution": "https://github.com/contentauth/c2pa-rs@1a56d244ee77d7e58221eabebede4281d9e868a4"
+      },
+      "metadata": {
+        "suite": "cawg-ica-validation",
+        "sha256": "2d82904a32ee77e887382a1170ad2682a1f3d6978a79f837a3eba9976ea3527d",
+        "size": 258982,
+        "c2paRsExpectedStatuses": [
+          "cawg.ica.credential_valid"
+        ]
+      }
+    },
+    {
+      "id": "rust-cawg-ica-unresolvable-did",
+      "asset": "c2pa-rs-0.90.22/identity/claim_aggregation/ica_validation/unresolvable_did.jpg",
+      "source": {
+        "url": "https://github.com/contentauth/c2pa-rs/blob/1a56d244ee77d7e58221eabebede4281d9e868a4/sdk/src/identity/tests/fixtures/claim_aggregation/ica_validation/unresolvable_did.jpg",
+        "license": "MIT OR Apache-2.0",
+        "attribution": "https://github.com/contentauth/c2pa-rs@1a56d244ee77d7e58221eabebede4281d9e868a4"
+      },
+      "metadata": {
+        "suite": "cawg-ica-validation",
+        "sha256": "2d4bde7a1059673cc13d91d207dbd9966fa992baf4bc1b9fc7a3ae4e3c4c49f6",
+        "size": 258982,
+        "c2paRsExpectedStatuses": [
+          "cawg.ica.did_unavailable"
+        ]
+      }
+    },
+    {
+      "id": "rust-cawg-ica-unsupported-did-method",
+      "asset": "c2pa-rs-0.90.22/identity/claim_aggregation/ica_validation/unsupported_did_method.jpg",
+      "source": {
+        "url": "https://github.com/contentauth/c2pa-rs/blob/1a56d244ee77d7e58221eabebede4281d9e868a4/sdk/src/identity/tests/fixtures/claim_aggregation/ica_validation/unsupported_did_method.jpg",
+        "license": "MIT OR Apache-2.0",
+        "attribution": "https://github.com/contentauth/c2pa-rs@1a56d244ee77d7e58221eabebede4281d9e868a4"
+      },
+      "metadata": {
+        "suite": "cawg-ica-validation",
+        "sha256": "cd24197ef3319ac7fc702dc92fdebcd475b9227b558d38583d5cf4d44a96f98d",
+        "size": 258982,
+        "c2paRsExpectedStatuses": [
+          "cawg.ica.invalid_issuer"
+        ]
+      }
+    },
+    {
+      "id": "rust-cawg-ica-valid-from-after-time-stamp",
+      "asset": "c2pa-rs-0.90.22/identity/claim_aggregation/ica_validation/valid_from_after_time_stamp.jpg",
+      "source": {
+        "url": "https://github.com/contentauth/c2pa-rs/blob/1a56d244ee77d7e58221eabebede4281d9e868a4/sdk/src/identity/tests/fixtures/claim_aggregation/ica_validation/valid_from_after_time_stamp.jpg",
+        "license": "MIT OR Apache-2.0",
+        "attribution": "https://github.com/contentauth/c2pa-rs@1a56d244ee77d7e58221eabebede4281d9e868a4"
+      },
+      "metadata": {
+        "suite": "cawg-ica-validation",
+        "sha256": "c043b0c42e2c6c6ff9ca185f5f4c923379ba0b7d7f390071ad59845ad4414a0b",
+        "size": 258982,
+        "c2paRsExpectedStatuses": [
+          "cawg.ica.time_stamp.validated",
+          "cawg.ica.valid_from.invalid"
+        ]
+      }
+    },
+    {
+      "id": "rust-cawg-ica-valid-from-in-future",
+      "asset": "c2pa-rs-0.90.22/identity/claim_aggregation/ica_validation/valid_from_in_future.jpg",
+      "source": {
+        "url": "https://github.com/contentauth/c2pa-rs/blob/1a56d244ee77d7e58221eabebede4281d9e868a4/sdk/src/identity/tests/fixtures/claim_aggregation/ica_validation/valid_from_in_future.jpg",
+        "license": "MIT OR Apache-2.0",
+        "attribution": "https://github.com/contentauth/c2pa-rs@1a56d244ee77d7e58221eabebede4281d9e868a4"
+      },
+      "metadata": {
+        "suite": "cawg-ica-validation",
+        "sha256": "453f15d7d3bb8d49b15ccc562af093145e7235aa5b25875ae39ef9f80e2e575d",
+        "size": 258982,
+        "c2paRsExpectedStatuses": [
+          "cawg.ica.valid_from.invalid"
+        ]
+      }
+    },
+    {
+      "id": "rust-cawg-ica-valid-from-missing",
+      "asset": "c2pa-rs-0.90.22/identity/claim_aggregation/ica_validation/valid_from_missing.jpg",
+      "source": {
+        "url": "https://github.com/contentauth/c2pa-rs/blob/1a56d244ee77d7e58221eabebede4281d9e868a4/sdk/src/identity/tests/fixtures/claim_aggregation/ica_validation/valid_from_missing.jpg",
+        "license": "MIT OR Apache-2.0",
+        "attribution": "https://github.com/contentauth/c2pa-rs@1a56d244ee77d7e58221eabebede4281d9e868a4"
+      },
+      "metadata": {
+        "suite": "cawg-ica-validation",
+        "sha256": "705957f911f2d65e4bfde4b962a38b771bd8294ce5550b45579a3447ca889ceb",
+        "size": 258982,
+        "c2paRsExpectedStatuses": [
+          "cawg.ica.valid_from.missing"
+        ]
+      }
+    },
+    {
+      "id": "rust-cawg-ica-valid-time-stamp",
+      "asset": "c2pa-rs-0.90.22/identity/claim_aggregation/ica_validation/valid_time_stamp.jpg",
+      "source": {
+        "url": "https://github.com/contentauth/c2pa-rs/blob/1a56d244ee77d7e58221eabebede4281d9e868a4/sdk/src/identity/tests/fixtures/claim_aggregation/ica_validation/valid_time_stamp.jpg",
+        "license": "MIT OR Apache-2.0",
+        "attribution": "https://github.com/contentauth/c2pa-rs@1a56d244ee77d7e58221eabebede4281d9e868a4"
+      },
+      "metadata": {
+        "suite": "cawg-ica-validation",
+        "sha256": "7b6eb4a2584318c682d3b320d3bbec4a8f80bd6316ba004b299cb5b25cfa6997",
+        "size": 258982,
+        "c2paRsExpectedStatuses": [
+          "cawg.ica.time_stamp.validated",
+          "cawg.ica.credential_valid"
+        ]
+      }
+    },
+    {
+      "id": "rust-cawg-ica-valid-until-in-future",
+      "asset": "c2pa-rs-0.90.22/identity/claim_aggregation/ica_validation/valid_until_in_future.jpg",
+      "source": {
+        "url": "https://github.com/contentauth/c2pa-rs/blob/1a56d244ee77d7e58221eabebede4281d9e868a4/sdk/src/identity/tests/fixtures/claim_aggregation/ica_validation/valid_until_in_future.jpg",
+        "license": "MIT OR Apache-2.0",
+        "attribution": "https://github.com/contentauth/c2pa-rs@1a56d244ee77d7e58221eabebede4281d9e868a4"
+      },
+      "metadata": {
+        "suite": "cawg-ica-validation",
+        "sha256": "ecf2fc7cad42ae82e55c902bc0045a68585c37ce9abc269aa5b202de86d4deae",
+        "size": 258982,
+        "c2paRsExpectedStatuses": [
+          "cawg.ica.credential_valid"
+        ]
+      }
+    },
+    {
+      "id": "rust-cawg-ica-valid-until-in-past",
+      "asset": "c2pa-rs-0.90.22/identity/claim_aggregation/ica_validation/valid_until_in_past.jpg",
+      "source": {
+        "url": "https://github.com/contentauth/c2pa-rs/blob/1a56d244ee77d7e58221eabebede4281d9e868a4/sdk/src/identity/tests/fixtures/claim_aggregation/ica_validation/valid_until_in_past.jpg",
+        "license": "MIT OR Apache-2.0",
+        "attribution": "https://github.com/contentauth/c2pa-rs@1a56d244ee77d7e58221eabebede4281d9e868a4"
+      },
+      "metadata": {
+        "suite": "cawg-ica-validation",
+        "sha256": "bc60a838a32dde0b8fdb46bd788a04f6ce41a8ce0d073a4b9a88792a0bbeb22c",
+        "size": 258982,
+        "c2paRsExpectedStatuses": [
+          "cawg.ica.valid_until.invalid"
+        ]
+      }
+    },
+    {
+      "id": "rust-cawg-adobe-connected-identities",
+      "asset": "c2pa-rs-0.90.22/identity/claim_aggregation/adobe_connected_identities.jpg",
+      "source": {
+        "url": "https://github.com/contentauth/c2pa-rs/blob/1a56d244ee77d7e58221eabebede4281d9e868a4/sdk/src/identity/tests/fixtures/claim_aggregation/adobe_connected_identities.jpg",
+        "license": "MIT OR Apache-2.0",
+        "attribution": "https://github.com/contentauth/c2pa-rs@1a56d244ee77d7e58221eabebede4281d9e868a4"
+      },
+      "metadata": {
+        "suite": "cawg-ica-interop",
+        "sha256": "d17c8bf620a2d1bff2395e2b7c597d17aaf7b823dc30f1521aa777813da43aa4",
+        "size": 249364,
+        "c2paRsExpectedStatuses": [
+          "cawg.ica.credential_valid"
+        ]
+      }
+    },
+    {
+      "id": "rust-cawg-ims-multiple-manifests",
+      "asset": "c2pa-rs-0.90.22/identity/claim_aggregation/ims_multiple_manifests.jpg",
+      "source": {
+        "url": "https://github.com/contentauth/c2pa-rs/blob/1a56d244ee77d7e58221eabebede4281d9e868a4/sdk/src/identity/tests/fixtures/claim_aggregation/ims_multiple_manifests.jpg",
+        "license": "MIT OR Apache-2.0",
+        "attribution": "https://github.com/contentauth/c2pa-rs@1a56d244ee77d7e58221eabebede4281d9e868a4"
+      },
+      "metadata": {
+        "suite": "cawg-ica-interop",
+        "sha256": "6d03e1dd6a941b352784731a03b580378c5d38738a7a7a2fab85041ebb643128",
+        "size": 194342,
+        "c2paRsExpectedStatuses": [
+          "cawg.ica.credential_valid"
+        ]
+      }
+    },
+    {
+      "id": "rust-cawg-connected-identities-did",
+      "asset": "c2pa-rs-0.90.22/identity/claim_aggregation/connected_identities_did.json",
+      "source": {
+        "url": "https://github.com/contentauth/c2pa-rs/blob/1a56d244ee77d7e58221eabebede4281d9e868a4/sdk/src/identity/tests/fixtures/claim_aggregation/connected_identities_did.json",
+        "license": "MIT OR Apache-2.0",
+        "attribution": "https://github.com/contentauth/c2pa-rs@1a56d244ee77d7e58221eabebede4281d9e868a4"
+      },
+      "metadata": {
+        "suite": "cawg-did-document",
+        "sha256": "e66c3346e1881663046f9c1d1a00d657f085068da557516b62218085c361fd2c",
+        "size": 681,
+        "c2paRsExpectedStatuses": []
+      }
+    },
+    {
+      "id": "rust-raw-ed25519-vector",
+      "asset": "c2pa-rs-0.90.22/crypto/raw-signature/ed25519.raw_sig",
+      "source": {"url": "https://github.com/contentauth/c2pa-rs/blob/c2pa-v0.90.22/sdk/tests/fixtures/crypto/raw_signature/ed25519.raw_sig", "license": "MIT OR Apache-2.0", "attribution": "https://github.com/contentauth/c2pa-rs@1a56d244ee77d7e58221eabebede4281d9e868a4"},
+      "metadata": {"suite": "raw-signature", "expected": "signature-valid", "algorithm": "ed25519", "relatedAssets": ["c2pa-rs-0.90.22/crypto/raw-signature/ed25519.pub", "c2pa-rs-0.90.22/crypto/raw-signature/ed25519.pub_key"], "sha256": "2be6db85cf3fb8589cba198a79fc61664f1ee3c6751a9fc8cee6f413d81fdc8f", "size": 64}
+    },
+    {
+      "id": "rust-raw-es256-vector",
+      "asset": "c2pa-rs-0.90.22/crypto/raw-signature/es256.raw_sig",
+      "source": {"url": "https://github.com/contentauth/c2pa-rs/blob/c2pa-v0.90.22/sdk/tests/fixtures/crypto/raw_signature/es256.raw_sig", "license": "MIT OR Apache-2.0", "attribution": "https://github.com/contentauth/c2pa-rs@1a56d244ee77d7e58221eabebede4281d9e868a4"},
+      "metadata": {"suite": "raw-signature", "expected": "signature-valid", "algorithm": "es256", "relatedAssets": ["c2pa-rs-0.90.22/crypto/raw-signature/es256.pub", "c2pa-rs-0.90.22/crypto/raw-signature/es256.pub_key"], "sha256": "dc40f44e5ea16c6c6de6d66c86fc5aee22d72823ba8907b4259fab56723cd8c0", "size": 64}
+    },
+    {
+      "id": "rust-raw-es384-vector",
+      "asset": "c2pa-rs-0.90.22/crypto/raw-signature/es384.raw_sig",
+      "source": {"url": "https://github.com/contentauth/c2pa-rs/blob/c2pa-v0.90.22/sdk/tests/fixtures/crypto/raw_signature/es384.raw_sig", "license": "MIT OR Apache-2.0", "attribution": "https://github.com/contentauth/c2pa-rs@1a56d244ee77d7e58221eabebede4281d9e868a4"},
+      "metadata": {"suite": "raw-signature", "expected": "signature-valid", "algorithm": "es384", "relatedAssets": ["c2pa-rs-0.90.22/crypto/raw-signature/es384.pub", "c2pa-rs-0.90.22/crypto/raw-signature/es384.pub_key"], "sha256": "8b53b7ad28bb31ae34d41636ae53740bfb776066e63b5d475425eef9ecfb38ab", "size": 96}
+    },
+    {
+      "id": "rust-raw-es512-vector",
+      "asset": "c2pa-rs-0.90.22/crypto/raw-signature/es512.raw_sig",
+      "source": {"url": "https://github.com/contentauth/c2pa-rs/blob/c2pa-v0.90.22/sdk/tests/fixtures/crypto/raw_signature/es512.raw_sig", "license": "MIT OR Apache-2.0", "attribution": "https://github.com/contentauth/c2pa-rs@1a56d244ee77d7e58221eabebede4281d9e868a4"},
+      "metadata": {"suite": "raw-signature", "expected": "signature-valid", "algorithm": "es512", "relatedAssets": ["c2pa-rs-0.90.22/crypto/raw-signature/es512.pub", "c2pa-rs-0.90.22/crypto/raw-signature/es512.pub_key"], "sha256": "3f23a0df2ac234a2ee1babf35a0bd2787aa387c10352ed7628392dcb2c3d0f94", "size": 132}
+    },
+    {
+      "id": "rust-raw-ps256-vector",
+      "asset": "c2pa-rs-0.90.22/crypto/raw-signature/ps256.raw_sig",
+      "source": {"url": "https://github.com/contentauth/c2pa-rs/blob/c2pa-v0.90.22/sdk/tests/fixtures/crypto/raw_signature/ps256.raw_sig", "license": "MIT OR Apache-2.0", "attribution": "https://github.com/contentauth/c2pa-rs@1a56d244ee77d7e58221eabebede4281d9e868a4"},
+      "metadata": {"suite": "raw-signature", "expected": "signature-valid", "algorithm": "ps256", "relatedAssets": ["c2pa-rs-0.90.22/crypto/raw-signature/ps256.pub", "c2pa-rs-0.90.22/crypto/raw-signature/ps256.pub_key"], "sha256": "032481bd5027fcb2c7e0454dbf4270825497a9baccd0aa52e3425af678ce9aeb", "size": 512}
+    },
+    {
+      "id": "rust-raw-ps384-vector",
+      "asset": "c2pa-rs-0.90.22/crypto/raw-signature/ps384.raw_sig",
+      "source": {"url": "https://github.com/contentauth/c2pa-rs/blob/c2pa-v0.90.22/sdk/tests/fixtures/crypto/raw_signature/ps384.raw_sig", "license": "MIT OR Apache-2.0", "attribution": "https://github.com/contentauth/c2pa-rs@1a56d244ee77d7e58221eabebede4281d9e868a4"},
+      "metadata": {"suite": "raw-signature", "expected": "signature-valid", "algorithm": "ps384", "relatedAssets": ["c2pa-rs-0.90.22/crypto/raw-signature/ps384.pub", "c2pa-rs-0.90.22/crypto/raw-signature/ps384.pub_key"], "sha256": "342ad3bf9a617efd38b2d925563a447e8f51abcef7585ff24ae1fd51e29a0e06", "size": 512}
+    },
+    {
+      "id": "rust-raw-ps512-vector",
+      "asset": "c2pa-rs-0.90.22/crypto/raw-signature/ps512.raw_sig",
+      "source": {"url": "https://github.com/contentauth/c2pa-rs/blob/c2pa-v0.90.22/sdk/tests/fixtures/crypto/raw_signature/ps512.raw_sig", "license": "MIT OR Apache-2.0", "attribution": "https://github.com/contentauth/c2pa-rs@1a56d244ee77d7e58221eabebede4281d9e868a4"},
+      "metadata": {"suite": "raw-signature", "expected": "signature-valid", "algorithm": "ps512", "relatedAssets": ["c2pa-rs-0.90.22/crypto/raw-signature/ps512.pub", "c2pa-rs-0.90.22/crypto/raw-signature/ps512.pub_key"], "sha256": "8b2879eb352d7041a6778320ceb0ea02fc073586c5a9c87c036b332c65ae99a6", "size": 512}
+    },
+    {
+      "id": "rust-raw-root-bundle",
+      "asset": "c2pa-rs-0.90.22/crypto/raw-signature/test_cert_root_bundle.pem",
+      "source": {"url": "https://github.com/contentauth/c2pa-rs/blob/c2pa-v0.90.22/sdk/tests/fixtures/crypto/raw_signature/test_cert_root_bundle.pem", "license": "MIT OR Apache-2.0", "attribution": "https://github.com/contentauth/c2pa-rs@1a56d244ee77d7e58221eabebede4281d9e868a4"},
+      "metadata": {"suite": "trust-list", "expected": "x509-trust-list-valid", "sha256": "88945e4d0dce1eb3a20812e4bd4c1b8b90ec8baa440953e8f589ca5807d81c8a", "size": 10578}
+    },
+    {
+      "id": "conformance-trust-list",
+      "asset": "c2pa-conformance-public/trust/C2PA-TRUST-LIST.pem",
+      "source": {"url": "https://github.com/c2pa-org/conformance-public/blob/9de7006b0bcf18c385842467ba19eec15772336b/trust-list/C2PA-TRUST-LIST.pem", "license": "CC-BY-4.0", "attribution": "https://github.com/c2pa-org/conformance-public@9de7006b0bcf18c385842467ba19eec15772336b"},
+      "metadata": {"suite": "trust-list", "expected": "x509-trust-list-valid", "sha256": "75cacc98b79ecac33713c7ecfb58d4a0ef383f3c1f886e7409f9e37e8664aea5", "size": 37911}
+    },
+    {
+      "id": "conformance-tsa-trust-list",
+      "asset": "c2pa-conformance-public/trust/C2PA-TSA-TRUST-LIST.pem",
+      "source": {"url": "https://github.com/c2pa-org/conformance-public/blob/9de7006b0bcf18c385842467ba19eec15772336b/trust-list/C2PA-TSA-TRUST-LIST.pem", "license": "CC-BY-4.0", "attribution": "https://github.com/c2pa-org/conformance-public@9de7006b0bcf18c385842467ba19eec15772336b"},
+      "metadata": {"suite": "trust-list", "expected": "x509-trust-list-valid", "sha256": "c688d3555f4a2f1f8d663472bbd37888ff234abdd234c25934c0f9292e4eb5c9", "size": 28863}
+    },
+    {
+      "id": "envelope-crjson-suite",
+      "asset": "c2pa-conformance-tool-cli/crjson-envelope/crJSON-schema.json",
+      "source": {"url": "https://github.com/contentauth/c2pa-conformance-tool-cli/blob/c09f0340524b088a81475f7b7eaab5ba7042772f/crJSON-docs/crJSON-schema.json", "license": "MIT OR Apache-2.0", "attribution": "https://github.com/contentauth/c2pa-conformance-tool-cli@c09f0340524b088a81475f7b7eaab5ba7042772f"},
+      "metadata": {"suite": "crjson-envelope", "expected": "envelope-cases-classified", "relatedAssets": ["c2pa-conformance-tool-cli/crjson-envelope/valid_minimal.json", "c2pa-conformance-tool-cli/crjson-envelope/invalid_missing_schema.json", "c2pa-conformance-tool-cli/crjson-envelope/invalid_no_results_array.json", "c2pa-conformance-tool-cli/crjson-envelope/invalid_schema_version_missing.json"], "issueCategory": "schema-validation", "sha256": "5dbea40540fb7be79b7f5b0e91308638d5080a2a3b596c7ef8cc96c4c3c7bbab", "size": 75411}
+    }
+  ]
+}

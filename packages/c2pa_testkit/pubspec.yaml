@@ -1,0 +1,34 @@
+name: c2pa_testkit
+description: Fixtures and differential/conformance helpers for c2pa_dart.
+version: 0.1.0-dev.1
+repository: https://github.com/abraham/c2pa_dart/tree/main/packages/c2pa_testkit
+issue_tracker: https://github.com/abraham/c2pa_dart/issues
+
+environment:
+  sdk: ^3.13.0
+
+resolution: workspace
+
+topics:
+  - c2pa
+  - conformance
+  - fixtures
+  - testing
+
+platforms:
+  android:
+  ios:
+  linux:
+  macos:
+  web:
+  windows:
+
+dependencies:
+  c2pa: ^0.1.0-dev.1
+  c2pa_codec: ^0.1.0-dev.1
+  c2pa_crypto: ^0.1.0-dev.1
+  c2pa_formats: ^0.1.0-dev.1
+  c2pa_io: ^0.1.0-dev.1
+
+dev_dependencies:
+  test: ^1.26.3

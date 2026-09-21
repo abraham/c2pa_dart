@@ -1,0 +1,255 @@
+import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
+import 'dart:typed_data';
+
+import '../fixture_asset.dart';
+
+const _assetPlaceholder = '{asset}';
+const _jsonPlaceholder = '{json}';
+const _crJsonPlaceholder = '{crjson}';
+
+final class C2paRsOracleCommand {
+  C2paRsOracleCommand({
+    required this.executable,
+    required Iterable<String> arguments,
+    required this.pinnedVersion,
+    Map<String, String> environment = const {},
+  }) : arguments = List.unmodifiable(arguments),
+       environment = Map.unmodifiable(environment) {
+    if (executable.trim().isEmpty || pinnedVersion.trim().isEmpty) {
+      throw ArgumentError('Executable and pinnedVersion must be non-empty.');
+    }
+  }
+
+  final String executable;
+  final List<String> arguments;
+  final String pinnedVersion;
+  final Map<String, String> environment;
+}
+
+final class C2paRsOracleResult {
+  const C2paRsOracleResult({
+    required this.commandVersion,
+    required this.exitCode,
+    required this.json,
+    required this.crJson,
+    required this.jsonText,
+    required this.crJsonText,
+    required this.stdout,
+    required this.stderr,
+  });
+
+  final String commandVersion;
+  final int exitCode;
+  final Object? json;
+  final Object? crJson;
+  final String jsonText;
+  final String? crJsonText;
+  final String stdout;
+  final String stderr;
+}
+
+sealed class C2paRsOracleException implements Exception {
+  const C2paRsOracleException(this.message);
+
+  final String message;
+
+  @override
+  String toString() => '$runtimeType: $message';
+}
+
+final class C2paRsOracleTimeoutException extends C2paRsOracleException {
+  const C2paRsOracleTimeoutException(Duration timeout)
+    : super('Oracle process exceeded timeout of $timeout.');
+}
+
+final class C2paRsOracleOutputException extends C2paRsOracleException {
+  const C2paRsOracleOutputException(int limit)
+    : super('Oracle output exceeded the $limit byte limit.');
+}
+
+final class C2paRsOracleFormatException extends C2paRsOracleException {
+  const C2paRsOracleFormatException(super.message);
+}
+
+/// Runs an explicitly configured, version-pinned c2pa-rs command.
+///
+/// Arguments may contain `{asset}`, `{json}`, and `{crjson}` placeholders.
+/// The adapter writes all transient files beneath caller-owned
+/// [scratchDirectory] and removes each invocation directory after completion.
+final class C2paRsOracle {
+  C2paRsOracle({
+    required this.command,
+    required Directory scratchDirectory,
+    this.timeout = const Duration(seconds: 10),
+    this.maxOutputBytes = 1024 * 1024,
+  }) : scratchDirectory = scratchDirectory.absolute {
+    if (!Uri.file(scratchDirectory.path).isAbsolute) {
+      throw ArgumentError.value(
+        scratchDirectory.path,
+        'scratchDirectory',
+        'must be absolute',
+      );
+    }
+    if (timeout <= Duration.zero) {
+      throw ArgumentError.value(timeout, 'timeout', 'must be positive');
+    }
+    if (maxOutputBytes < 1) {
+      throw ArgumentError.value(
+        maxOutputBytes,
+        'maxOutputBytes',
+        'must be positive',
+      );
+    }
+  }
+
+  final C2paRsOracleCommand command;
+  final Directory scratchDirectory;
+  final Duration timeout;
+  final int maxOutputBytes;
+
+  static int _runSequence = 0;
+
+  Future<C2paRsOracleResult> inspect(FixtureAsset asset) async {
+    await scratchDirectory.create(recursive: true);
+    final runDirectory = Directory.fromUri(
+      scratchDirectory.uri.resolve(
+        'run-$pid-${DateTime.now().microsecondsSinceEpoch}-'
+        '${_runSequence++}/',
+      ),
+    );
+    await runDirectory.create();
+
+    try {
+      final assetFile = File.fromUri(
+        runDirectory.uri.resolve('asset${_safeExtension(asset.name)}'),
+      );
+      final jsonFile = File.fromUri(runDirectory.uri.resolve('report.json'));
+      final crJsonFile = File.fromUri(
+        runDirectory.uri.resolve('report.cr.json'),
+      );
+      await assetFile.writeAsBytes(asset.bytes, flush: true);
+
+      final replacements = <String, String>{
+        _assetPlaceholder: assetFile.path,
+        _jsonPlaceholder: jsonFile.path,
+        _crJsonPlaceholder: crJsonFile.path,
+      };
+      String replacePlaceholders(String argument) {
+        var result = argument;
+        for (final replacement in replacements.entries) {
+          result = result.replaceAll(replacement.key, replacement.value);
+        }
+        return result;
+      }
+
+      final process = await Process.start(
+        command.executable,
+        command.arguments.map(replacePlaceholders).toList(growable: false),
+        workingDirectory: runDirectory.path,
+        environment: command.environment,
+        includeParentEnvironment: true,
+        runInShell: false,
+      );
+
+      var capturedBytes = 0;
+      var outputExceeded = false;
+      final stdoutBytes = BytesBuilder(copy: false);
+      final stderrBytes = BytesBuilder(copy: false);
+
+      Future<void> capture(Stream<List<int>> stream, BytesBuilder target) =>
+          stream.forEach((chunk) {
+            capturedBytes += chunk.length;
+            if (capturedBytes > maxOutputBytes) {
+              outputExceeded = true;
+              process.kill();
+              return;
+            }
+            target.add(chunk);
+          });
+
+      final stdoutDone = capture(process.stdout, stdoutBytes);
+      final stderrDone = capture(process.stderr, stderrBytes);
+      final exitFuture = process.exitCode;
+      late final int exitCode;
+      var timedOut = false;
+      try {
+        exitCode = await exitFuture.timeout(timeout);
+      } on TimeoutException {
+        timedOut = true;
+        process.kill();
+        exitCode = await exitFuture;
+      }
+      await Future.wait([stdoutDone, stderrDone]);
+
+      if (timedOut) throw C2paRsOracleTimeoutException(timeout);
+      if (outputExceeded) {
+        throw C2paRsOracleOutputException(maxOutputBytes);
+      }
+
+      late final String stdout;
+      late final String stderr;
+      try {
+        stdout = utf8.decode(stdoutBytes.takeBytes());
+        stderr = utf8.decode(stderrBytes.takeBytes());
+      } on FormatException catch (error) {
+        throw C2paRsOracleFormatException(
+          'Oracle emitted non-UTF-8 process output: ${error.message}',
+        );
+      }
+      final hasJsonFile = await jsonFile.exists();
+      final hasCrJsonFile = await crJsonFile.exists();
+      final fileOutputBytes =
+          (hasJsonFile ? await jsonFile.length() : 0) +
+          (hasCrJsonFile ? await crJsonFile.length() : 0);
+      if (capturedBytes + fileOutputBytes > maxOutputBytes) {
+        throw C2paRsOracleOutputException(maxOutputBytes);
+      }
+      final jsonText = hasJsonFile
+          ? await jsonFile.readAsString()
+          : stdout.trim();
+      if (jsonText.isEmpty) {
+        throw const C2paRsOracleFormatException(
+          'Oracle did not emit a JSON report.',
+        );
+      }
+      final crJsonText = hasCrJsonFile ? await crJsonFile.readAsString() : null;
+
+      return C2paRsOracleResult(
+        commandVersion: command.pinnedVersion,
+        exitCode: exitCode,
+        json: _decodeReport(jsonText, 'JSON'),
+        crJson: crJsonText == null ? null : _decodeReport(crJsonText, 'crJSON'),
+        jsonText: jsonText,
+        crJsonText: crJsonText,
+        stdout: stdout,
+        stderr: stderr,
+      );
+    } finally {
+      if (await runDirectory.exists()) {
+        await runDirectory.delete(recursive: true);
+      }
+    }
+  }
+
+  static Object? _decodeReport(String source, String kind) {
+    try {
+      return jsonDecode(source);
+    } on FormatException catch (error) {
+      throw C2paRsOracleFormatException(
+        'Oracle emitted malformed $kind: ${error.message}',
+      );
+    }
+  }
+
+  String _safeExtension(String name) {
+    final fileName = name.replaceAll(r'\', '/').split('/').last;
+    final dot = fileName.lastIndexOf('.');
+    if (dot <= 0) return '.bin';
+    final extension = fileName.substring(dot);
+    return RegExp(r'^\.[A-Za-z0-9]{1,10}$').hasMatch(extension)
+        ? extension.toLowerCase()
+        : '.bin';
+  }
+}

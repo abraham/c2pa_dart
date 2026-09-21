@@ -1,0 +1,53 @@
+{
+  "$schema": "./compatibility.schema.json",
+  "baseline": {
+    "repository": "https://github.com/contentauth/c2pa-rs",
+    "tag": "c2pa-v0.90.22",
+    "sdkVersion": "0.90.22",
+    "profiles": [
+      "claim-v1-read-validate",
+      "claim-v2-create-read-validate",
+      "ingredient-v1-v2-v3",
+      "c2pa-2.2",
+      "c2pa-2.3-2.4-stable-backports",
+      "crjson-2.3.0"
+    ]
+  },
+  "features": {
+    "randomAccessIo": "complete",
+    "deterministicCbor": "complete",
+    "jumbf": "complete",
+    "compressedManifests": "partial",
+    "claims": "complete",
+    "assertions": "complete",
+    "standardAssertions": "complete",
+    "cose": "complete",
+    "pki": "complete",
+    "trustLists": "complete",
+    "timestamps": "complete",
+    "ocsp": "complete",
+    "reader": "complete",
+    "reports": "complete",
+    "remoteManifests": "complete",
+    "builder": "complete",
+    "assetFormats": {
+      "standalone": "complete",
+      "jpeg": "partial",
+      "png": "partial",
+      "tiffDng": "partial",
+      "gif": "partial",
+      "riff": "partial",
+      "bmff": "partial",
+      "jpegXl": "partial",
+      "mp3": "partial",
+      "flac": "partial",
+      "svg": "partial",
+      "zipFamily": "partial",
+      "pdfRead": "complete"
+    },
+    "cawgIdentity": "complete",
+    "workingArchives": "complete",
+    "testkit": "complete",
+    "cli": "complete"
+  }
+}

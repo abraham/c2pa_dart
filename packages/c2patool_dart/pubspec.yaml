@@ -1,0 +1,35 @@
+name: c2patool_dart
+description: Secure command-line workflows for the pure Dart C2PA SDK.
+version: 0.1.0-dev.1
+repository: https://github.com/abraham/c2pa_dart/tree/main/packages/c2patool_dart
+issue_tracker: https://github.com/abraham/c2pa_dart/issues
+
+environment:
+  sdk: ^3.13.0
+
+resolution: workspace
+
+topics:
+  - c2pa
+  - cli
+  - content-authenticity
+  - provenance
+
+platforms:
+  linux:
+  macos:
+  windows:
+
+dependencies:
+  args: ^2.7.0
+  c2pa: ^0.1.0-dev.1
+  c2pa_crypto: ^0.1.0-dev.1
+  c2pa_formats: ^0.1.0-dev.1
+  c2pa_io: ^0.1.0-dev.1
+
+dev_dependencies:
+  c2pa_codec: ^0.1.0-dev.1
+  test: ^1.26.3
+
+executables:
+  c2patool: c2patool

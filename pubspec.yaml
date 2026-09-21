@@ -1,0 +1,20 @@
+name: c2pa_dart_workspace
+publish_to: none
+repository: https://github.com/abraham/c2pa_dart
+issue_tracker: https://github.com/abraham/c2pa_dart/issues
+
+environment:
+  sdk: ^3.13.0
+
+workspace:
+  - packages/c2pa
+  - packages/c2pa_io
+  - packages/c2pa_codec
+  - packages/c2pa_crypto
+  - packages/c2pa_formats
+  - packages/c2pa_testkit
+  - packages/c2patool_dart
+
+dev_dependencies:
+  lints: ^6.0.0
+  test: ^1.26.3

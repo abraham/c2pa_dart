@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "fixtures": [
+    {
+      "id": "valid-jpeg",
+      "asset": "fixtures/valid.jpg",
+      "source": {
+        "url": "https://example.test/asset.jpg",
+        "license": "CC-BY-4.0",
+        "attribution": "Example fixture author"
+      },
+      "metadata": {
+        "profile": "baseline"
+      }
+    },
+    {
+      "id": "future-profile",
+      "asset": "fixtures/future.c2pa",
+      "source": {
+        "url": "https://example.test/future.c2pa",
+        "license": "CC0-1.0"
+      },
+      "skipReason": "Unsupported test profile"
+    }
+  ]
+}
