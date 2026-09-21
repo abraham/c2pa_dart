@@ -3,35 +3,47 @@ import 'dart:typed_data';
 
 /// A parsed X.509 algorithm identifier.
 final class X509AlgorithmIdentifier {
+  /// Creates an AlgorithmIdentifier with OID and optional encoded parameters.
   X509AlgorithmIdentifier(this.oid, List<int>? parametersDer)
     : _parametersDer = parametersDer == null
           ? null
           : Uint8List.fromList(parametersDer);
 
+  /// The dotted-decimal OBJECT IDENTIFIER for the algorithm.
   final String oid;
+
   final Uint8List? _parametersDer;
 
+  /// A defensive copy of the DER parameters, or `null` when absent.
   Uint8List? get parametersDer =>
       _parametersDer == null ? null : Uint8List.fromList(_parametersDer);
 }
 
 /// One attribute in an X.509 distinguished name.
 final class X509NameAttribute {
+  /// Creates a distinguished-name attribute from an OID and decoded value.
   const X509NameAttribute(this.oid, this.value);
 
+  /// The attribute type OBJECT IDENTIFIER.
   final String oid;
+
+  /// The decoded DirectoryString, IA5String, or printable string value.
   final String value;
 }
 
 /// A parsed X.509 distinguished name, retaining its exact DER.
 final class X509DistinguishedName {
+  /// Creates a distinguished name with decoded [attributes] and exact [der].
   X509DistinguishedName(List<X509NameAttribute> attributes, List<int> der)
     : attributes = List.unmodifiable(attributes),
       _der = Uint8List.fromList(der);
 
+  /// Immutable attributes in the order parsed from the Name.
   final List<X509NameAttribute> attributes;
+
   final Uint8List _der;
 
+  /// A defensive copy of the exact DER Name encoding.
   Uint8List get der => Uint8List.fromList(_der);
 
   /// Strictly parses one DER Name value.
@@ -43,28 +55,52 @@ final class X509DistinguishedName {
 
 /// The BasicConstraints extension.
 final class X509BasicConstraints {
+  /// Creates parsed BasicConstraints extension values.
   const X509BasicConstraints({required this.isCa, this.pathLength});
 
+  /// Whether the RFC 5280 cA boolean is asserted.
   final bool isCa;
+
+  /// The pathLenConstraint value, or `null` when absent.
   final int? pathLength;
 }
 
-enum X509GeneralNameType { dns, ipAddress, email, uri }
+/// Supported GeneralName choices parsed by this package.
+enum X509GeneralNameType {
+  /// A dNSName IA5String.
+  dns,
+
+  /// An iPAddress OCTET STRING.
+  ipAddress,
+
+  /// An rfc822Name IA5String.
+  email,
+
+  /// A uniformResourceIdentifier IA5String.
+  uri,
+}
 
 /// One supported GeneralName value.
 final class X509GeneralName {
+  /// Creates a supported GeneralName with either textual or byte content.
   X509GeneralName(this.type, {this.text, List<int>? bytes})
     : _bytes = bytes == null ? null : Uint8List.fromList(bytes);
 
+  /// The supported GeneralName choice.
   final X509GeneralNameType type;
+
+  /// The decoded IA5String value, or `null` for IP address names.
   final String? text;
+
   final Uint8List? _bytes;
 
+  /// A defensive copy of IP address bytes, or `null` for textual names.
   Uint8List? get bytes => _bytes == null ? null : Uint8List.fromList(_bytes);
 }
 
 /// One supported GeneralSubtree base from NameConstraints.
 final class X509NameConstraint {
+  /// Creates a supported GeneralSubtree base from NameConstraints.
   X509NameConstraint(
     this.type, {
     this.text,
@@ -73,70 +109,114 @@ final class X509NameConstraint {
   }) : _address = address == null ? null : Uint8List.fromList(address),
        _mask = mask == null ? null : Uint8List.fromList(mask);
 
+  /// The GeneralName type constrained by this subtree.
   final X509GeneralNameType type;
+
+  /// The lower-cased DNS, email, or URI constraint, or `null` for IP.
   final String? text;
+
   final Uint8List? _address;
   final Uint8List? _mask;
 
+  /// A defensive copy of the network address bytes, or `null` for text.
   Uint8List? get address =>
       _address == null ? null : Uint8List.fromList(_address);
+
+  /// A defensive copy of the contiguous network mask, or `null` for text.
   Uint8List? get mask => _mask == null ? null : Uint8List.fromList(_mask);
 }
 
 /// Parsed NameConstraints subtrees supported by this package.
 final class X509NameConstraints {
+  /// Creates parsed NameConstraints permitted and excluded subtrees.
   X509NameConstraints({
     required Iterable<X509NameConstraint> permitted,
     required Iterable<X509NameConstraint> excluded,
   }) : permitted = List.unmodifiable(permitted),
        excluded = List.unmodifiable(excluded);
 
+  /// Immutable permitted subtrees parsed from the extension.
   final List<X509NameConstraint> permitted;
+
+  /// Immutable excluded subtrees parsed from the extension.
   final List<X509NameConstraint> excluded;
 }
 
+/// One PolicyMappings pair from RFC 5280 section 4.2.1.5.
 final class X509PolicyMapping {
+  /// Creates a policy mapping between issuer and subject policy OIDs.
   const X509PolicyMapping(this.issuerDomainPolicy, this.subjectDomainPolicy);
 
+  /// The issuerDomainPolicy OBJECT IDENTIFIER.
   final String issuerDomainPolicy;
+
+  /// The subjectDomainPolicy OBJECT IDENTIFIER.
   final String subjectDomainPolicy;
 }
 
+/// PolicyConstraints values from RFC 5280 section 4.2.1.11.
 final class X509PolicyConstraints {
+  /// Creates parsed PolicyConstraints skip-cert values.
   const X509PolicyConstraints({
     this.requireExplicitPolicy,
     this.inhibitPolicyMapping,
   });
 
+  /// The requireExplicitPolicy skipCerts value, or `null` when absent.
   final int? requireExplicitPolicy;
+
+  /// The inhibitPolicyMapping skipCerts value, or `null` when absent.
   final int? inhibitPolicyMapping;
 }
 
 /// KeyUsage bits defined by RFC 5280.
 enum X509KeyUsage {
+  /// The digitalSignature bit.
   digitalSignature,
+
+  /// The contentCommitment bit, also known as nonRepudiation.
   contentCommitment,
+
+  /// The keyEncipherment bit.
   keyEncipherment,
+
+  /// The dataEncipherment bit.
   dataEncipherment,
+
+  /// The keyAgreement bit.
   keyAgreement,
+
+  /// The keyCertSign bit.
   keyCertSign,
+
+  /// The cRLSign bit.
   crlSign,
+
+  /// The encipherOnly bit, valid only with keyAgreement.
   encipherOnly,
+
+  /// The decipherOnly bit, valid only with keyAgreement.
   decipherOnly,
 }
 
 /// A parsed X.509 extension.
 final class X509Extension {
+  /// Creates a parsed extension with OID, criticality, and raw value bytes.
   X509Extension({
     required this.oid,
     required this.critical,
     required List<int> value,
   }) : _value = Uint8List.fromList(value);
 
+  /// The extension OBJECT IDENTIFIER.
   final String oid;
+
+  /// Whether RFC 5280 marks the extension as critical.
   final bool critical;
+
   final Uint8List _value;
 
+  /// A defensive copy of the extnValue OCTET STRING content.
   Uint8List get value => Uint8List.fromList(_value);
 }
 
@@ -183,48 +263,110 @@ final class X509Certificate {
 
   final Uint8List _der;
   final Uint8List _tbsCertificateDer;
+
+  /// The positive certificate serial number, limited to 20 bytes by parsing.
   final BigInt serialNumber;
+
+  /// The parsed issuer Name.
   final X509DistinguishedName issuer;
+
+  /// The parsed subject Name.
   final X509DistinguishedName subject;
+
+  /// The UTC start of the certificate validity interval.
   final DateTime notBefore;
+
+  /// The UTC end of the certificate validity interval.
   final DateTime notAfter;
+
   final Uint8List _subjectPublicKeyInfoDer;
+
+  /// The subjectPublicKeyInfo AlgorithmIdentifier.
   final X509AlgorithmIdentifier subjectPublicKeyAlgorithm;
+
   final Uint8List _subjectPublicKey;
+
+  /// The outer certificate signature AlgorithmIdentifier.
   final X509AlgorithmIdentifier signatureAlgorithm;
+
   final Uint8List _signature;
+
+  /// The BasicConstraints extension, or `null` when absent.
   final X509BasicConstraints? basicConstraints;
+
+  /// The KeyUsage extension bits, or `null` when absent.
   final Set<X509KeyUsage>? keyUsage;
+
+  /// ExtendedKeyUsage OIDs, or `null` when absent.
   final List<String>? extendedKeyUsage;
+
   final Uint8List? _subjectKeyIdentifier;
   final Uint8List? _authorityKeyIdentifier;
+
+  /// OCSP responder URIs from AuthorityInformationAccess.
+  ///
+  /// Parsing only exposes the URIs; it performs no network fetches.
   final List<Uri> ocspUrls;
+
+  /// Supported SubjectAlternativeName entries.
   final List<X509GeneralName> subjectAlternativeNames;
+
+  /// NameConstraints extension values, or `null` when absent.
   final X509NameConstraints? nameConstraints;
+
+  /// CertificatePolicies OIDs, or `null` when absent.
   final List<String>? certificatePolicies;
+
+  /// PolicyMappings entries, or `null` when absent.
   final List<X509PolicyMapping>? policyMappings;
+
+  /// PolicyConstraints values, or `null` when absent.
   final X509PolicyConstraints? policyConstraints;
+
+  /// InhibitAnyPolicy skipCerts value, or `null` when absent.
   final int? inhibitAnyPolicy;
+
+  /// All parsed X.509 extensions in the certificate.
   final List<X509Extension> extensions;
+
+  /// Critical extensions not enforced when explicitly allowed during parsing.
   final List<X509Extension> criticalUnknownExtensions;
 
+  /// A defensive copy of the complete DER Certificate.
   Uint8List get der => Uint8List.fromList(_der);
+
+  /// A defensive copy of the signed TBSCertificate DER.
   Uint8List get tbsCertificateDer => Uint8List.fromList(_tbsCertificateDer);
+
+  /// A defensive copy of the SubjectPublicKeyInfo DER.
   Uint8List get subjectPublicKeyInfoDer =>
       Uint8List.fromList(_subjectPublicKeyInfoDer);
+
+  /// A defensive copy of the subjectPublicKey BIT STRING bytes.
   Uint8List get subjectPublicKey => Uint8List.fromList(_subjectPublicKey);
+
+  /// A defensive copy of the byte-aligned certificate signature.
   Uint8List get signature => Uint8List.fromList(_signature);
+
+  /// The subject key identifier bytes, or `null` when absent.
   Uint8List? get subjectKeyIdentifier => _subjectKeyIdentifier == null
       ? null
       : Uint8List.fromList(_subjectKeyIdentifier);
+
+  /// The authority key identifier bytes, or `null` when absent.
   Uint8List? get authorityKeyIdentifier => _authorityKeyIdentifier == null
       ? null
       : Uint8List.fromList(_authorityKeyIdentifier);
 
   /// Parses one DER-encoded X.509 certificate.
   ///
+  /// Implements strict DER and RFC 5280 structure checks for the fields this
+  /// package exposes, including KU, EKU, BasicConstraints, SAN, AIA OCSP,
+  /// NameConstraints, and policy extensions. It performs no network I/O.
   /// Unknown critical extensions are rejected unless
   /// [allowUnknownCriticalExtensions] is true.
+  /// Throws a [FormatException] for malformed input or unsupported
+  /// critical-extension requirements.
   factory X509Certificate.parse(
     List<int> input, {
     bool allowUnknownCriticalExtensions = false,

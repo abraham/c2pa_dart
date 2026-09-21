@@ -4,21 +4,47 @@ import 'ocsp.dart';
 import 'path_validation.dart';
 import 'x509_certificate.dart';
 
+/// Revocation reason codes from RFC 5280 section 5.3.1.
 enum CrlRevocationReason {
+  /// No specific revocation reason was supplied.
   unspecified(0),
+
+  /// The subject certificate private key was compromised.
   keyCompromise(1),
+
+  /// The issuing CA private key was compromised.
   caCompromise(2),
+
+  /// The subject's affiliation changed.
   affiliationChanged(3),
+
+  /// The certificate was superseded.
   superseded(4),
+
+  /// The subject ceased operation.
   cessationOfOperation(5),
+
+  /// The certificate is temporarily on hold.
   certificateHold(6),
+
+  /// The certificate was removed from a CRL.
   removeFromCrl(8),
+
+  /// The subject's privilege was withdrawn.
   privilegeWithdrawn(9),
+
+  /// The attribute authority was compromised.
   aaCompromise(10);
 
+  /// Creates a CRL reason carrying its RFC 5280 integer [value].
   const CrlRevocationReason(this.value);
+
+  /// The integer value encoded in the CRLReason ENUMERATED.
   final int value;
 
+  /// Parses an RFC 5280 CRLReason integer.
+  ///
+  /// Throws a [FormatException] if [value] is not supported.
   static CrlRevocationReason fromValue(int value) {
     for (final reason in values) {
       if (reason.value == value) {
@@ -31,6 +57,7 @@ enum CrlRevocationReason {
 
 /// Scope declared by the IssuingDistributionPoint extension.
 final class CrlIssuingDistributionPoint {
+  /// Creates a parsed RFC 5280 IssuingDistributionPoint extension value.
   CrlIssuingDistributionPoint({
     required this.onlyContainsUserCertificates,
     required this.onlyContainsCaCertificates,
@@ -45,13 +72,24 @@ final class CrlIssuingDistributionPoint {
            ? null
            : Uint8List.fromList(distributionPointDer);
 
+  /// Whether this CRL scope is limited to end-entity certificates.
   final bool onlyContainsUserCertificates;
+
+  /// Whether this CRL scope is limited to CA certificates.
   final bool onlyContainsCaCertificates;
+
+  /// Whether revoked entries may name certificate issuers other than the CRL issuer.
   final bool indirectCrl;
+
+  /// Whether this CRL scope is limited to attribute certificates.
   final bool onlyContainsAttributeCertificates;
+
+  /// The covered reason subset, or `null` when all reasons are covered.
   final Set<CrlRevocationReason>? onlySomeReasons;
+
   final Uint8List? _distributionPointDer;
 
+  /// The encoded DistributionPointName, or `null` when not constrained.
   Uint8List? get distributionPointDer => _distributionPointDer == null
       ? null
       : Uint8List.fromList(_distributionPointDer);
@@ -67,10 +105,19 @@ final class CrlRevokedCertificate {
     required this.effectiveIssuer,
   });
 
+  /// The positive certificate serial number listed by the CRL entry.
   final BigInt serialNumber;
+
+  /// The UTC revocationDate from RFC 5280 section 5.1.
   final DateTime revocationTime;
+
+  /// The CRL reason extension value, or `null` when absent.
   final CrlRevocationReason? reason;
+
+  /// The invalidityDate extension value, or `null` when absent.
   final DateTime? invalidityDate;
+
+  /// The issuer in force for this entry, including indirect CRL entries.
   final X509DistinguishedName effectiveIssuer;
 }
 
@@ -100,25 +147,57 @@ final class X509Crl {
 
   final Uint8List _der;
   final Uint8List _tbsCertListDer;
+
+  /// The parsed CRL version, either 1 or 2.
   final int version;
+
+  /// The CRL issuer Name from the TBSCertList.
   final X509DistinguishedName issuer;
+
+  /// The UTC thisUpdate time from the TBSCertList.
   final DateTime thisUpdate;
+
+  /// The UTC nextUpdate time, or `null` when the CRL omits it.
   final DateTime? nextUpdate;
+
   final Uint8List? _authorityKeyIdentifier;
+
+  /// The CRLNumber extension value, or `null` when absent.
   final BigInt? crlNumber;
+
+  /// The DeltaCRLIndicator base number, or `null` for a complete CRL.
   final BigInt? deltaCrlIndicator;
+
+  /// The IssuingDistributionPoint extension value, or `null` when absent.
   final CrlIssuingDistributionPoint? issuingDistributionPoint;
+
+  /// Immutable revoked-certificate entries parsed from the CRL.
   final List<CrlRevokedCertificate> revokedCertificates;
+
+  /// The outer CertificateList signature AlgorithmIdentifier.
   final X509AlgorithmIdentifier signatureAlgorithm;
+
   final Uint8List _signature;
 
+  /// A defensive copy of the complete DER CertificateList.
   Uint8List get der => Uint8List.fromList(_der);
+
+  /// A defensive copy of the signed TBSCertList DER.
   Uint8List get tbsCertListDer => Uint8List.fromList(_tbsCertListDer);
+
+  /// The authority key identifier bytes, or `null` when absent.
   Uint8List? get authorityKeyIdentifier => _authorityKeyIdentifier == null
       ? null
       : Uint8List.fromList(_authorityKeyIdentifier);
+
+  /// A defensive copy of the byte-aligned CertificateList signature.
   Uint8List get signature => Uint8List.fromList(_signature);
 
+  /// Parses one DER-encoded RFC 5280 CertificateList without network I/O.
+  ///
+  /// Throws a [FormatException] for malformed DER, invalid RFC 5280 structure,
+  /// stale-field ordering, or unsupported critical extension semantics. Throws
+  /// an [UnsupportedError] for unknown critical CRL extensions.
   factory X509Crl.parse(List<int> input) {
     _validateBytes(input);
     final der = Uint8List.fromList(input);
@@ -173,32 +252,84 @@ final class X509Crl {
   }
 }
 
-enum CrlStatus { good, revoked, unknown, stale, malformed, untrusted }
+/// High-level CRL verification status produced by this package.
+enum CrlStatus {
+  /// Fresh, trusted CRL evidence says the certificate is not revoked.
+  good,
 
+  /// Fresh, trusted CRL evidence lists the certificate as revoked.
+  revoked,
+
+  /// The CRL was valid but not authoritative for the certificate.
+  unknown,
+
+  /// The CRL validity window does not cover the evaluation time.
+  stale,
+
+  /// The CRL or its signature failed structural validation.
+  malformed,
+
+  /// The CRL signer did not validate to the trust policy.
+  untrusted,
+}
+
+/// Machine-readable CRL verification issue codes.
 enum CrlIssueCode {
+  /// The DER CertificateList could not be parsed as supported RFC 5280 CRL.
   malformedCrl,
+
+  /// The target certificate, CRL issuer, or signer did not match.
   wrongIssuer,
+
+  /// The CRL AKI did not match the signer subject key identifier.
   authorityKeyIdentifierMismatch,
+
+  /// The CRL is older than its nextUpdate or configured maximum age.
   staleCrl,
+
+  /// The CRL thisUpdate is after the evaluation time.
   futureCrl,
+
+  /// The CertificateList signature was malformed or invalid.
   invalidSignature,
+
+  /// The signer is not a CA permitted to sign CRLs.
   unauthorizedSigner,
+
+  /// The signer certificate chain did not validate to the trust policy.
   untrustedSigner,
+
+  /// The IssuingDistributionPoint excludes the target certificate.
   targetOutOfScope,
+
+  /// The CRL covers only some reasons and cannot prove all reasons.
   partialReasonCoverage,
+
+  /// A delta CRL was supplied without a verified base CRL.
   deltaBaseCrlRequired,
+
+  /// The CRL contains an unsupported critical extension.
   unsupportedCriticalExtension,
+
+  /// A required CRL signature algorithm is unsupported.
   unsupportedSignatureAlgorithm,
 }
 
+/// One CRL verification issue with a stable code and message.
 final class CrlIssue {
+  /// Creates a CRL issue with [code] and human-readable [message].
   const CrlIssue(this.code, this.message);
 
+  /// The machine-readable category of the verification issue.
   final CrlIssueCode code;
+
+  /// A human-readable description of the verification issue.
   final String message;
 }
 
+/// Structured CRL verification outcome.
 final class CrlVerificationResult {
+  /// Creates a CRL verification result with immutable [issues].
   CrlVerificationResult({
     required this.status,
     required List<CrlIssue> issues,
@@ -208,15 +339,31 @@ final class CrlVerificationResult {
     this.pathResult,
   }) : issues = List.unmodifiable(issues);
 
+  /// The high-level status computed from parsed CRL and trust checks.
   final CrlStatus status;
+
+  /// Immutable issues collected while verifying the CRL.
   final List<CrlIssue> issues;
+
+  /// The parsed CRL, or `null` when parsing failed.
   final X509Crl? crl;
+
+  /// The matching revoked entry, or `null` when the certificate is not listed.
   final CrlRevokedCertificate? entry;
+
+  /// The certificate used to verify the CRL signature.
   final X509Certificate? signerCertificate;
+
+  /// The signer path validation result, or `null` before path checks run.
   final CertificatePathValidationResult? pathResult;
 }
 
 /// Verifies one stapled CRL without performing network access.
+///
+/// Parses RFC 5280 section 5 DER, checks issuer and AKI linkage, thisUpdate
+/// and nextUpdate freshness, signer authorization, signature, path trust, and
+/// IssuingDistributionPoint scope. Malformed or stale CRLs return structured
+/// statuses rather than being fetched or retried.
 Future<CrlVerificationResult> verifyCrl(
   List<int> crlDer, {
   required X509Certificate certificate,
@@ -482,21 +629,39 @@ Future<CrlVerificationResult> verifyCrl(
   );
 }
 
+/// Combined status for already-verified OCSP and CRL evidence.
 enum RevocationEvidenceStatus {
+  /// Authoritative evidence says the certificate is not revoked.
   good,
+
+  /// Authoritative evidence says the certificate is revoked.
   revoked,
+
+  /// No authoritative evidence is available.
   unknown,
+
+  /// Evidence exists but is outside its accepted freshness window.
   stale,
+
+  /// OCSP and CRL evidence disagree on good versus revoked.
   conflict,
+
+  /// OCSP evidence could not be fetched or delivered.
   inaccessible,
+
+  /// Available evidence includes malformed proof.
   malformed,
 }
 
 /// Deterministic result from combining stapled OCSP and CRL evidence.
 final class RevocationEvidenceResult {
+  /// Creates a combined revocation evidence result.
   const RevocationEvidenceResult({required this.status, required this.reason});
 
+  /// The combined status chosen from already-verified evidence.
   final RevocationEvidenceStatus status;
+
+  /// A human-readable explanation for [status].
   final String reason;
 }
 

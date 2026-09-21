@@ -3,11 +3,22 @@ import 'x509_certificate.dart';
 
 /// Extended Key Usage OIDs relevant to certificate profiles.
 abstract final class ExtendedKeyUsageOids {
+  /// The `anyExtendedKeyUsage` OID `2.5.29.37.0`.
   static const any = '2.5.29.37.0';
+
+  /// The `id-kp-codeSigning` EKU OID.
   static const codeSigning = '1.3.6.1.5.5.7.3.3';
+
+  /// The `id-kp-emailProtection` EKU OID.
   static const emailProtection = '1.3.6.1.5.5.7.3.4';
+
+  /// The `id-kp-timeStamping` EKU OID used by RFC 3161 TSAs.
   static const timeStamping = '1.3.6.1.5.5.7.3.8';
+
+  /// The `id-kp-OCSPSigning` EKU OID used by delegated responders.
   static const ocspSigning = '1.3.6.1.5.5.7.3.9';
+
+  /// The `id-kp-documentSigning` EKU OID used by document signers.
   static const documentSigning = '1.3.6.1.5.5.7.3.36';
 }
 
@@ -43,24 +54,49 @@ List<CertificateProfileIssue> validateOcspResponderCertificate(
 
 /// A machine-readable certificate profile problem.
 enum CertificateProfileIssueCode {
+  /// The validation time is before the certificate `notBefore` time.
   notYetValid,
+
+  /// The validation time is after the certificate `notAfter` time.
   expired,
+
+  /// The certificate is a CA where an end-entity certificate is required.
   caCertificate,
+
+  /// The required BasicConstraints extension is absent.
   missingBasicConstraints,
+
+  /// The required KeyUsage extension is absent.
   missingKeyUsage,
+
+  /// KeyUsage does not permit `digitalSignature`.
   missingDigitalSignature,
+
+  /// ExtendedKeyUsage is absent or lacks a required purpose OID.
   missingExtendedKeyUsage,
+
+  /// ExtendedKeyUsage contains a forbidden purpose OID.
   disallowedExtendedKeyUsage,
+
+  /// A TSA ExtendedKeyUsage extension is present but not critical.
   extendedKeyUsageNotCritical,
+
+  /// The public-key algorithm does not match the requested signature algorithm.
   keyAlgorithmMismatch,
+
+  /// A critical extension is present but not implemented by this SDK.
   unsupportedCriticalExtension,
 }
 
 /// One validation issue found in a certificate profile.
 final class CertificateProfileIssue {
+  /// Creates a certificate-profile issue with [code] and [message].
   const CertificateProfileIssue(this.code, this.message);
 
+  /// The machine-readable profile failure code.
   final CertificateProfileIssueCode code;
+
+  /// The human-readable profile failure detail.
   final String message;
 }
 

@@ -10,12 +10,16 @@ import 'byte_sink.dart';
 /// throw.
 /// Returned bytes must not alias mutable source storage.
 abstract interface class RandomAccessByteSource {
+  /// Total number of bytes available from the source.
   Future<int> get length;
 
+  /// Reads exactly the bytes covered by [range].
   Future<Uint8List> read(ByteRange range);
 }
 
+/// A fixed random-access byte source backed by an isolated in-memory copy.
 final class MemoryByteSource implements RandomAccessByteSource {
+  /// Creates a source from [bytes], copying them into immutable source state.
   MemoryByteSource(List<int> bytes) : _bytes = Uint8List.fromList(bytes);
 
   final Uint8List _bytes;

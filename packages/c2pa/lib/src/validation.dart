@@ -3,9 +3,21 @@ import 'dart:collection';
 import 'json_utils.dart';
 import 'validation_code.dart';
 
-enum ValidationState { invalid, valid, trusted }
+/// Overall validation state for an active manifest and its ingredients.
+enum ValidationState {
+  /// Required C2PA signature validation checks failed or are missing.
+  invalid,
 
+  /// Required C2PA signature checks passed, but trust was not established.
+  valid,
+
+  /// Required C2PA signature checks passed with trusted signing credentials.
+  trusted,
+}
+
+/// One validation status code emitted while checking a C2PA manifest.
 final class ValidationIssue {
+  /// Creates an issue and derives [severity] from the code registry.
   ValidationIssue({
     required this.code,
     this.url,
@@ -13,6 +25,7 @@ final class ValidationIssue {
     this.ingredientUri,
   }) : severity = ValidationCode.classify(code);
 
+  /// Creates an issue from a known [ValidationCode].
   ValidationIssue.known({
     required ValidationCode code,
     this.url,
@@ -35,6 +48,7 @@ final class ValidationIssue {
     this.ingredientUri,
   });
 
+  /// Creates an issue from a C2PA validation-status JSON object.
   factory ValidationIssue.fromJson(
     Map<String, Object?> json, {
     String? ingredientUri,
@@ -45,16 +59,25 @@ final class ValidationIssue {
     ingredientUri: ingredientUri,
   );
 
+  /// C2PA validation code such as `claimSignature.validated`.
   final String code;
+
+  /// Severity classified for [code], or supplied by the validator.
   final ValidationSeverity severity;
+
+  /// Optional URL associated with the validation issue.
   final String? url;
+
+  /// Optional human-readable detail supplied by the validator.
   final String? explanation;
 
   /// Internal routing metadata. It is intentionally not serialized.
   final String? ingredientUri;
 
+  /// Whether this issue is not a validation failure.
   bool get passed => severity != ValidationSeverity.failure;
 
+  /// Encodes this issue as C2PA validation-status JSON.
   Map<String, Object?> toJson() => {
     'code': code,
     'url': ?url,
@@ -73,7 +96,9 @@ final class ValidationIssue {
   int get hashCode => Object.hash(code, url, explanation, ingredientUri);
 }
 
+/// Validation issues grouped by success, informational, and failure severity.
 final class StatusCodes {
+  /// Creates grouped status lists from [statuses].
   StatusCodes({Iterable<ValidationIssue> statuses = const []}) {
     final successful = <ValidationIssue>[];
     final informational = <ValidationIssue>[];
@@ -93,6 +118,7 @@ final class StatusCodes {
     failure = List<ValidationIssue>.unmodifiable(failed);
   }
 
+  /// Creates grouped status lists from C2PA validation-results JSON.
   factory StatusCodes.fromJson(
     Map<String, Object?> json, {
     String? ingredientUri,
@@ -111,16 +137,23 @@ final class StatusCodes {
     return StatusCodes(statuses: statuses);
   }
 
+  /// Successful validation status entries.
   late final List<ValidationIssue> success;
+
+  /// Informational validation status entries.
   late final List<ValidationIssue> informational;
+
+  /// Failed validation status entries.
   late final List<ValidationIssue> failure;
 
+  /// All status entries in success, informational, then failure order.
   List<ValidationIssue> get all => List<ValidationIssue>.unmodifiable([
     ...success,
     ...informational,
     ...failure,
   ]);
 
+  /// Encodes the grouped status lists as validation-results JSON.
   Map<String, Object?> toJson() => {
     'success': success.map((status) => status.toJson()).toList(growable: false),
     'informational': informational
@@ -144,7 +177,9 @@ final class StatusCodes {
   );
 }
 
+/// Validation delta associated with one ingredient assertion URI.
 final class IngredientDeltaValidationResult {
+  /// Creates an ingredient delta and stamps each issue with its URI.
   IngredientDeltaValidationResult({
     required this.ingredientAssertionUri,
     required StatusCodes validationDeltas,
@@ -165,6 +200,7 @@ final class IngredientDeltaValidationResult {
          ),
        );
 
+  /// Creates an ingredient delta from validation-results JSON.
   factory IngredientDeltaValidationResult.fromJson(Map<String, Object?> json) {
     final uri = json['ingredientAssertionURI'] as String;
     return IngredientDeltaValidationResult(
@@ -176,9 +212,13 @@ final class IngredientDeltaValidationResult {
     );
   }
 
+  /// JUMBF URI of the ingredient assertion this delta describes.
   final String ingredientAssertionUri;
+
+  /// Validation status changes attributed to [ingredientAssertionUri].
   final StatusCodes validationDeltas;
 
+  /// Encodes this ingredient delta as validation-results JSON.
   Map<String, Object?> toJson() => {
     'ingredientAssertionURI': ingredientAssertionUri,
     'validationDeltas': validationDeltas.toJson(),
@@ -194,7 +234,9 @@ final class IngredientDeltaValidationResult {
   int get hashCode => Object.hash(ingredientAssertionUri, validationDeltas);
 }
 
+/// Validation results for the active manifest and ingredient deltas.
 final class ValidationResults {
+  /// Creates validation results from pre-grouped status lists.
   ValidationResults({
     this.activeManifest,
     Iterable<IngredientDeltaValidationResult>? ingredientDeltas,
@@ -205,6 +247,7 @@ final class ValidationResults {
                ingredientDeltas,
              );
 
+  /// Groups flat validation [issues] into active-manifest and ingredient results.
   factory ValidationResults.fromIssues(
     Iterable<ValidationIssue> issues, {
     DateTime? validationTime,
@@ -231,6 +274,7 @@ final class ValidationResults {
     );
   }
 
+  /// Creates validation results from a C2PA validation-results object.
   factory ValidationResults.fromJson(Map<String, Object?> json) =>
       ValidationResults(
         activeManifest: switch (json['activeManifest']) {
@@ -245,12 +289,16 @@ final class ValidationResults {
         },
       );
 
+  /// Validation statuses for the active manifest, or `null` if absent.
   final StatusCodes? activeManifest;
+
+  /// Per-ingredient validation deltas, or `null` when none were reported.
   final List<IngredientDeltaValidationResult>? ingredientDeltas;
 
   /// Internal document-level metadata. It is intentionally not serialized.
   final DateTime? validationTime;
 
+  /// Overall state derived from signature and trust validation statuses.
   ValidationState get state {
     final active = activeManifest;
     if (active == null) return ValidationState.invalid;
@@ -289,6 +337,7 @@ final class ValidationResults {
     return isTrusted ? ValidationState.trusted : ValidationState.valid;
   }
 
+  /// All active-manifest and ingredient validation issues.
   List<ValidationIssue> get issues => List<ValidationIssue>.unmodifiable([
     if (activeManifest case final active?) ...active.all,
     for (final delta
@@ -296,14 +345,17 @@ final class ValidationResults {
       ...delta.validationDeltas.all,
   ]);
 
+  /// Validation issues whose severity is `ValidationSeverity.failure`.
   List<ValidationIssue> get errors => UnmodifiableListView(
     issues.where((issue) => issue.severity == ValidationSeverity.failure),
   );
 
+  /// Validation issues whose severity is `ValidationSeverity.informational`.
   List<ValidationIssue> get warnings => UnmodifiableListView(
     issues.where((issue) => issue.severity == ValidationSeverity.informational),
   );
 
+  /// Encodes these results as C2PA validation-results JSON.
   Map<String, Object?> toJson() => {
     'activeManifest': ?activeManifest?.toJson(),
     'ingredientDeltas': ?ingredientDeltas

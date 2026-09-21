@@ -11,6 +11,10 @@ import '../hash_layout.dart';
 import '../xmp.dart';
 import '../xmp_remote_reference.dart';
 
+/// A JPEG handler for C2PA APP11 JPEG XT segments.
+///
+/// The manifest is stored across one or more APP11 segments with the `JP`
+/// common identifier and `c2pa` JPEG XT marker.
 final class JpegAssetHandler
     implements
         AssetHandler,
@@ -18,6 +22,7 @@ final class JpegAssetHandler
         BoxHashLayoutProvider,
         XmpMetadataProvider,
         RemoteManifestReferenceProvider {
+  /// Creates a JPEG handler with segment and byte limits.
   const JpegAssetHandler({
     this.maxManifestSize = 64 * 1024 * 1024,
     this.maxSegmentCount = 4096,
@@ -48,11 +53,22 @@ final class JpegAssetHandler
   static const List<int> _c2paMarker = <int>[0x63, 0x32, 0x70, 0x61];
   static const String _xmpSignature = 'http://ns.adobe.com/xap/1.0/\u0000';
 
+  /// Maximum reconstructed C2PA manifest size in bytes.
   final int maxManifestSize;
+
+  /// Maximum number of JPEG marker segments parsed from the asset.
   final int maxSegmentCount;
+
+  /// Maximum source JPEG size in bytes.
   final int maxSourceSize;
+
+  /// Maximum rewritten JPEG size in bytes.
   final int maxOutputSize;
+
+  /// Maximum XMP APP1 packet size in bytes.
   final int maxXmpSize;
+
+  /// Maximum UTF-8 length of a remote reference in bytes.
   final int maxRemoteReferenceLength;
 
   @override
@@ -1118,6 +1134,7 @@ final class JpegAssetHandler
   }
 }
 
+/// Backward-compatible alias for [JpegAssetHandler].
 typedef JpegHandler = JpegAssetHandler;
 
 enum _JpegMutation { embed, replace, remove }

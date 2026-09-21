@@ -11,6 +11,10 @@ import 'x509_certificate.dart';
 
 /// Immutable inputs controlling certificate path construction and validation.
 final class TrustPolicy {
+  /// Creates an immutable RFC 5280 path-validation policy.
+  ///
+  /// Throws [ArgumentError] if DER inputs are empty, hashes are not 32
+  /// bytes, byte values are outside `0..255`, or [maxDepth] is less than 1.
   TrustPolicy({
     required Iterable<List<int>> trustAnchors,
     Iterable<List<int>> intermediates = const [],
@@ -41,58 +45,130 @@ final class TrustPolicy {
   final List<Uint8List> _trustAnchors;
   final List<Uint8List> _intermediates;
   final List<Uint8List> _allowedEndEntitySha256Hashes;
+
+  /// The signer EKU OIDs accepted for C2PA leaf certificates.
   final Set<String> allowedEkuOids;
+
+  /// The certificate policy OIDs required along the completed path.
   final Set<String> requiredCertificatePolicyOids;
+
+  /// The UTC instant used for certificate validity checks.
   final DateTime evaluationTime;
+
+  /// The maximum number of certificates allowed in a candidate path.
   final int maxDepth;
 
+  /// Defensive copies of DER-encoded trust anchors.
   List<Uint8List> get trustAnchors =>
       _trustAnchors.map(Uint8List.fromList).toList(growable: false);
 
+  /// Defensive copies of DER-encoded intermediate certificates.
   List<Uint8List> get intermediates =>
       _intermediates.map(Uint8List.fromList).toList(growable: false);
 
+  /// Defensive copies of directly trusted leaf SHA-256 hashes.
   List<Uint8List> get allowedEndEntitySha256Hashes =>
       _allowedEndEntitySha256Hashes
           .map(Uint8List.fromList)
           .toList(growable: false);
 }
 
-enum CertificatePathStatus { trusted, invalid, untrusted, ambiguous }
+/// The trust state produced by certificate path validation.
+enum CertificatePathStatus {
+  /// A single valid path reached a configured trust anchor or direct hash.
+  trusted,
 
+  /// The leaf or a candidate path failed validation checks.
+  invalid,
+
+  /// No valid path reached a configured trust anchor.
+  untrusted,
+
+  /// More than one valid path reached configured trust anchors.
+  ambiguous,
+}
+
+/// Machine-readable RFC 5280 certificate path validation issue codes.
 enum CertificatePathIssueCode {
+  /// A certificate DER input could not be parsed.
   malformedCertificate,
+
+  /// The leaf certificate failed its required C2PA or TSA profile.
   leafProfile,
+
+  /// A certificate is not valid at the policy evaluation time.
   certificateNotYetValid,
+
+  /// A certificate has expired at the policy evaluation time.
   certificateExpired,
+
+  /// A critical extension is present but unsupported.
   unsupportedCriticalExtension,
+
+  /// No candidate issuer matched the certificate issuer name and AKI.
   issuerNotFound,
+
+  /// An issuer candidate is not marked as a CA certificate.
   issuerNotCa,
+
+  /// An issuer KeyUsage extension does not permit `keyCertSign`.
   issuerMissingKeyCertSign,
+
+  /// A BasicConstraints path length constraint is exceeded.
   pathLengthExceeded,
+
+  /// A subject name falls within an excluded name subtree.
   nameConstraintExcluded,
+
+  /// A subject name is outside all permitted name subtrees.
   nameConstraintNotPermitted,
+
+  /// RFC 5280 policy processing requires an explicit policy.
   explicitPolicyRequired,
+
+  /// The path does not satisfy the active certificate policy set.
   certificatePolicyViolation,
+
+  /// Policy mappings appear after policy mapping has been inhibited.
   policyMappingInhibited,
+
+  /// The only matching policy is `anyPolicy` after it was inhibited.
   anyPolicyInhibited,
+
+  /// A certificate signature failed verification or was malformed.
   badCertificateSignature,
+
+  /// A certificate signature algorithm is not supported.
   unsupportedSignatureAlgorithm,
+
+  /// Path construction encountered a repeated certificate.
   loopDetected,
+
+  /// Path construction exceeded [TrustPolicy.maxDepth].
   maxDepthExceeded,
+
+  /// More than one valid path reached a trust anchor.
   ambiguousPath,
 }
 
+/// One issue found while constructing or validating a certificate path.
 final class CertificatePathIssue {
+  /// Creates a path-validation issue with optional path depth.
   const CertificatePathIssue(this.code, this.message, {this.certificateDepth});
 
+  /// The machine-readable path-validation failure code.
   final CertificatePathIssueCode code;
+
+  /// The human-readable path-validation failure detail.
   final String message;
+
+  /// The zero-based leaf-to-anchor path depth, or `null` if not specific.
   final int? certificateDepth;
 }
 
 /// Structured result of certificate path construction and validation.
 final class CertificatePathValidationResult {
+  /// Creates a certificate path validation result.
   CertificatePathValidationResult({
     required this.status,
     required List<X509Certificate> path,
@@ -101,11 +177,19 @@ final class CertificatePathValidationResult {
   }) : path = List.unmodifiable(path),
        issues = List.unmodifiable(issues);
 
+  /// The overall trust status for the attempted path validation.
   final CertificatePathStatus status;
+
+  /// The validated leaf-to-anchor path, or partial leaf-only path on failure.
   final List<X509Certificate> path;
+
+  /// The immutable path-validation issues collected during evaluation.
   final List<CertificatePathIssue> issues;
+
+  /// Whether trust came from an allowed leaf SHA-256 hash instead of a path.
   final bool directlyAllowedEndEntity;
 
+  /// Whether [status] is [CertificatePathStatus.trusted].
   bool get isTrusted => status == CertificatePathStatus.trusted;
 }
 
@@ -875,6 +959,11 @@ Future<bool> _verifyCertificateSignature(
 ///
 /// This supports the RSA PKCS#1 v1.5, RSA-PSS, NIST ECDSA, and Ed25519
 /// algorithms accepted by certificate and CMS validation.
+/// Verifies [signature] over [data] with [certificate] subject public key.
+///
+/// Supports RSA PKCS#1 v1.5, RSA-PSS, ECDSA, and Ed25519 OIDs accepted
+/// elsewhere in the path validator. Returns `false` for parameter or key
+/// mismatches and throws [UnsupportedError] for unknown signature OIDs.
 Future<bool> verifySignatureWithCertificatePublicKey({
   required X509Certificate certificate,
   required X509AlgorithmIdentifier signatureAlgorithm,

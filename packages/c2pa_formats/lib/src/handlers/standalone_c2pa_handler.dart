@@ -7,8 +7,10 @@ import '../asset_handler.dart';
 import '../errors.dart';
 import '../hash_layout.dart';
 
+/// A handler for standalone C2PA JUMBF manifest stores.
 final class StandaloneC2paHandler
     implements AssetHandler, BoxHashLayoutProvider {
+  /// Creates a handler for `.c2pa` manifest-store files.
   const StandaloneC2paHandler();
 
   static const int _basicHeaderLength = 8;

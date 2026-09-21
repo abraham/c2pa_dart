@@ -21,12 +21,16 @@ enum C2paBinaryOutput {
 
 /// Stable JSON encoding options shared by all reader report projections.
 final class C2paJsonOptions {
+  /// Creates report JSON options.
   const C2paJsonOptions({
     this.pretty = false,
     this.binaryOutput = C2paBinaryOutput.redact,
   });
 
+  /// Whether encoded JSON should use two-space indentation.
   final bool pretty;
+
+  /// How binary values are represented in report projections.
   final C2paBinaryOutput binaryOutput;
 }
 
@@ -47,13 +51,16 @@ extension C2paReaderReports on C2paReader {
     C2paJsonOptions options = const C2paJsonOptions(),
   }) => _ReportExporter(this, options).crJson();
 
+  /// Encodes [toSdkJson] as a JSON string.
   String encodeSdkJson({C2paJsonOptions options = const C2paJsonOptions()}) =>
       _encodeReport(toSdkJson(options: options), options);
 
+  /// Encodes [toDetailedJson] as a JSON string.
   String encodeDetailedJson({
     C2paJsonOptions options = const C2paJsonOptions(),
   }) => _encodeReport(toDetailedJson(options: options), options);
 
+  /// Encodes [toCrJson] as a JSON string.
   String encodeCrJson({C2paJsonOptions options = const C2paJsonOptions()}) =>
       _encodeReport(toCrJson(options: options), options);
 }

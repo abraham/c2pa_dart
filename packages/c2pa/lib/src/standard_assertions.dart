@@ -4,16 +4,39 @@ import 'dart:typed_data';
 import 'claim.dart';
 import 'json_utils.dart';
 
-enum C2paStandardAssertionEncoding { cbor, json, binary }
+/// Wire encoding used for a standard C2PA assertion payload.
+enum C2paStandardAssertionEncoding {
+  /// CBOR payload encoded as `application/cbor`.
+  cbor,
 
+  /// JSON payload encoded as `application/json`.
+  json,
+
+  /// Opaque byte payload with an explicit content type.
+  binary,
+}
+
+/// A standard C2PA assertion value that can be embedded in a claim.
 abstract interface class C2paStandardAssertion {
+  /// Assertion label as it appears in the manifest.
   String get label;
+
+  /// Wire encoding used for the value returned by `toAssertionData`.
   C2paStandardAssertionEncoding get encoding;
+
+  /// MIME type for the assertion payload; null when none is declared.
   String? get contentType;
+
+  /// Converts this assertion to the payload model for its encoding.
   Object? toAssertionData();
 }
 
+/// JSON metadata assertion for the `c2pa.metadata.v1` label.
 final class C2paMetadataAssertion implements C2paStandardAssertion {
+  /// Creates metadata from JSON-LD context entries and namespaced values.
+  ///
+  /// Throws FormatException if the version is unsupported, the context is
+  /// empty or invalid, or a value key has no declared namespace.
   C2paMetadataAssertion({
     required Map<String, String> context,
     required Map<String, Object?> values,
@@ -51,6 +74,7 @@ final class C2paMetadataAssertion implements C2paStandardAssertion {
     }
   }
 
+  /// Parses a `c2pa.metadata` JSON object.
   factory C2paMetadataAssertion.fromJson(
     Map<String, Object?> json, {
     int version = 1,
@@ -70,10 +94,19 @@ final class C2paMetadataAssertion implements C2paStandardAssertion {
     );
   }
 
+  /// Base assertion label used to form `c2pa.metadata.v1`.
   static const baseLabel = 'c2pa.metadata';
+
+  /// Version suffix encoded in the assertion label; only version 1 is accepted.
   final int version;
+
+  /// JSON-LD context map keyed by namespace prefix.
   final Map<String, String> context;
+
+  /// Namespaced metadata values excluding `@context`.
   final Map<String, Object?> values;
+
+  /// Extension fields preserved from decoding and re-emitted unchanged.
   final Map<String, Object?> unknownFields;
 
   @override
@@ -89,6 +122,8 @@ final class C2paMetadataAssertion implements C2paStandardAssertion {
     ...values,
     ...unknownFields,
   };
+
+  /// Encodes this assertion as a JSON-compatible map.
   Map<String, Object?> toJson() => toAssertionData();
 
   @override
@@ -107,7 +142,12 @@ final class C2paMetadataAssertion implements C2paStandardAssertion {
   );
 }
 
+/// Review rating entry embedded in assertion metadata.
 final class C2paReviewRating {
+  /// Creates a review rating with a human explanation and score.
+  ///
+  /// Throws FormatException when the explanation is empty or the value is
+  /// outside the inclusive range from 1 through 5.
   C2paReviewRating({
     required this.explanation,
     required this.value,
@@ -121,6 +161,7 @@ final class C2paReviewRating {
     }
   }
 
+  /// Parses a review rating from the CBOR map representation.
   factory C2paReviewRating.fromCbor(Object? value) {
     final map = _map(value, 'review rating');
     return C2paReviewRating(
@@ -131,11 +172,19 @@ final class C2paReviewRating {
     );
   }
 
+  /// Human-readable reason for the review score; must be non-empty.
   final String explanation;
+
+  /// Review score in the inclusive range from 1 through 5.
   final int value;
+
+  /// Optional machine-readable rating code; null omits `code`.
   final String? code;
+
+  /// Extension fields preserved from decoding and re-emitted unchanged.
   final Map<String, Object?> unknownFields;
 
+  /// Encodes this value as the CBOR map shape used by C2PA.
   Map<String, Object?> toCborMap() => {
     ...unknownFields,
     'explanation': explanation,
@@ -155,7 +204,11 @@ final class C2paReviewRating {
       Object.hash(explanation, value, code, deepHash(unknownFields));
 }
 
+/// Description of a source that supplied assertion metadata.
 final class C2paDataSource {
+  /// Creates a data source entry.
+  ///
+  /// Throws FormatException when the source type is empty.
   C2paDataSource({
     required this.type,
     this.details,
@@ -168,6 +221,7 @@ final class C2paDataSource {
     if (type.isEmpty) throw const FormatException('Data source type is empty');
   }
 
+  /// Parses a data source entry from its CBOR map representation.
   factory C2paDataSource.fromCbor(Object? value) {
     final map = _map(value, 'data source');
     return C2paDataSource(
@@ -179,11 +233,19 @@ final class C2paDataSource {
     );
   }
 
+  /// Type discriminator serialized in the source map; must be non-empty.
   final String type;
+
+  /// Optional human-readable source details; null omits `details`.
   final String? details;
+
+  /// Optional actor records associated with this data source.
   final List<Map<String, Object?>>? actors;
+
+  /// Extension fields preserved from decoding and re-emitted unchanged.
   final Map<String, Object?> unknownFields;
 
+  /// Encodes this value as the CBOR map shape used by C2PA.
   Map<String, Object?> toCborMap() => {
     ...unknownFields,
     'type': type,
@@ -203,7 +265,12 @@ final class C2paDataSource {
       Object.hash(type, details, deepHash(actors), deepHash(unknownFields));
 }
 
+/// CBOR assertion metadata for the `c2pa.assertion.metadata.v1` label.
 final class C2paAssertionMetadata implements C2paStandardAssertion {
+  /// Creates assertion metadata from optional descriptive subrecords.
+  ///
+  /// Throws FormatException when version is not 1 or `dateTime` is not
+  /// parseable as an ISO 8601 timestamp.
   C2paAssertionMetadata({
     Iterable<C2paReviewRating>? reviewRatings,
     this.dateTime,
@@ -232,6 +299,7 @@ final class C2paAssertionMetadata implements C2paStandardAssertion {
     }
   }
 
+  /// Parses assertion metadata from a CBOR map.
   factory C2paAssertionMetadata.fromCbor(Object? value, {int version = 1}) {
     final map = _map(value, 'assertion metadata');
     return C2paAssertionMetadata(
@@ -261,14 +329,31 @@ final class C2paAssertionMetadata implements C2paStandardAssertion {
     );
   }
 
+  /// Base assertion label used to form `c2pa.assertion.metadata.v1`.
   static const baseLabel = 'c2pa.assertion.metadata';
+
+  /// Version suffix encoded in the assertion label; only version 1 is accepted.
   final int version;
+
+  /// Optional review ratings associated with the assertion.
   final List<C2paReviewRating>? reviewRatings;
+
+  /// Optional ISO 8601 timestamp string for this metadata record.
   final String? dateTime;
+
+  /// Optional hashed URI identifying the assertion being described.
   final ClaimHashedUri? reference;
+
+  /// Optional source information for the assertion data.
   final C2paDataSource? dataSource;
+
+  /// Optional localization records preserved as JSON-like maps.
   final List<Map<String, Object?>>? localizations;
+
+  /// Optional region to which this metadata applies.
   final C2paRegionOfInterest? regionOfInterest;
+
+  /// Extension fields preserved from decoding and re-emitted unchanged.
   final Map<String, Object?> unknownFields;
 
   @override
@@ -292,6 +377,8 @@ final class C2paAssertionMetadata implements C2paStandardAssertion {
     if (regionOfInterest != null)
       'regionOfInterest': regionOfInterest!.toCborMap(),
   };
+
+  /// Encodes this assertion as a CBOR-compatible map.
   Map<String, Object?> toCborMap() => toAssertionData();
 
   @override
@@ -318,14 +405,51 @@ final class C2paAssertionMetadata implements C2paStandardAssertion {
   );
 }
 
-enum C2paRegionRangeType { spatial, temporal, frame, textual, identified }
+/// Kind of region range payload in assertion metadata.
+enum C2paRegionRangeType {
+  /// Visual area described by a geometric shape.
+  spatial,
 
-enum C2paShapeType { rectangle, circle, polygon }
+  /// Time span range, currently limited to `npt` strings.
+  temporal,
 
-enum C2paUnitType { pixel, percent }
+  /// Frame interval with non-negative integer bounds.
+  frame,
 
+  /// Text selector range with at least one selector.
+  textual,
+
+  /// Named item range with identifier and value fields.
+  identified,
+}
+
+/// Geometric shape used by a spatial region range.
+enum C2paShapeType {
+  /// Rectangular shape using origin, width, and height.
+  rectangle,
+
+  /// Circular shape using origin and dimensions as supplied.
+  circle,
+
+  /// Polygon shape requiring at least three vertices.
+  polygon,
+}
+
+/// Coordinate unit for a region shape.
+enum C2paUnitType {
+  /// Coordinates measured in asset pixels.
+  pixel,
+
+  /// Coordinates measured as percentages of the asset.
+  percent,
+}
+
+/// Two-dimensional coordinate used by C2PA region shapes.
 final class C2paCoordinate {
+  /// Creates a coordinate from finite numeric axis values.
   const C2paCoordinate({required this.x, required this.y});
+
+  /// Parses a coordinate from a CBOR map with finite `x` and `y`.
   factory C2paCoordinate.fromCbor(Object? value) {
     final map = _map(value, 'coordinate');
     return C2paCoordinate(
@@ -333,8 +457,14 @@ final class C2paCoordinate {
       y: _requiredNum(map, 'y').toDouble(),
     );
   }
+
+  /// Horizontal coordinate in the units declared by the enclosing shape.
   final double x;
+
+  /// Vertical coordinate in the units declared by the enclosing shape.
   final double y;
+
+  /// Encodes this coordinate as a CBOR-compatible map.
   Map<String, Object?> toCborMap() => {'x': x, 'y': y};
   @override
   bool operator ==(Object other) =>
@@ -343,7 +473,12 @@ final class C2paCoordinate {
   int get hashCode => Object.hash(x, y);
 }
 
+/// Spatial shape payload for a C2PA region range.
 final class C2paRegionShape {
+  /// Creates a region shape with validated dimensions and vertices.
+  ///
+  /// Throws FormatException for negative dimensions or polygon shapes with
+  /// fewer than three vertices.
   C2paRegionShape({
     required this.type,
     required this.unit,
@@ -366,6 +501,7 @@ final class C2paRegionShape {
     }
   }
 
+  /// Parses a region shape from its CBOR map representation.
   factory C2paRegionShape.fromCbor(Object? value) {
     final map = _map(value, 'region shape');
     return C2paRegionShape(
@@ -388,14 +524,31 @@ final class C2paRegionShape {
     );
   }
 
+  /// Shape kind that determines how dimensions and vertices are interpreted.
   final C2paShapeType type;
+
+  /// Coordinate unit used by the origin, dimensions, and vertices.
   final C2paUnitType unit;
+
+  /// Reference coordinate for the shape in the declared unit.
   final C2paCoordinate origin;
+
+  /// Optional non-negative width; null omits `width`.
   final double? width;
+
+  /// Optional non-negative height; null omits `height`.
   final double? height;
+
+  /// Optional inclusion flag for whether the shape marks the inside area.
   final bool? inside;
+
+  /// Optional polygon vertices; polygons require at least three.
   final List<C2paCoordinate>? vertices;
+
+  /// Extension fields preserved from decoding and re-emitted unchanged.
   final Map<String, Object?> unknownFields;
+
+  /// Encodes this value as the CBOR map shape used by C2PA.
   Map<String, Object?> toCborMap() => {
     ...unknownFields,
     'type': type.name,
@@ -431,7 +584,12 @@ final class C2paRegionShape {
   );
 }
 
+/// Typed range payload within a region of interest.
 final class C2paRegionRange {
+  /// Creates a region range with exactly one matching payload.
+  ///
+  /// Throws FormatException when the selected payload does not match `type`
+  /// or when the payload violates its range-specific constraints.
   C2paRegionRange({
     required this.type,
     this.shape,
@@ -465,6 +623,7 @@ final class C2paRegionRange {
     _validateRangePayload(type, this.time, this.frame, this.text, this.item);
   }
 
+  /// Parses a region range from its CBOR map representation.
   factory C2paRegionRange.fromCbor(Object? value) {
     final map = _map(value, 'region range');
     final type = _enum(C2paRegionRangeType.values, map['type'], 'range type');
@@ -488,13 +647,28 @@ final class C2paRegionRange {
     );
   }
 
+  /// Range kind that selects which payload field is present.
   final C2paRegionRangeType type;
+
+  /// Spatial payload present only when `type` is spatial.
   final C2paRegionShape? shape;
+
+  /// Temporal payload present only when `type` is temporal.
   final Map<String, Object?>? time;
+
+  /// Frame payload present only when `type` is frame.
   final Map<String, Object?>? frame;
+
+  /// Text selector payload present only when `type` is textual.
   final Map<String, Object?>? text;
+
+  /// Identified-item payload present only when `type` is identified.
   final Map<String, Object?>? item;
+
+  /// Extension fields preserved from decoding and re-emitted unchanged.
   final Map<String, Object?> unknownFields;
+
+  /// Encodes this value as the CBOR map shape used by C2PA.
   Map<String, Object?> toCborMap() => {
     ...unknownFields,
     'type': type.name,
@@ -526,7 +700,11 @@ final class C2paRegionRange {
   );
 }
 
+/// Collection of one or more ranges describing an asset region.
 final class C2paRegionOfInterest {
+  /// Creates a region of interest from one or more ranges.
+  ///
+  /// Throws FormatException when no ranges are supplied.
   C2paRegionOfInterest({
     required Iterable<C2paRegionRange> regions,
     this.name,
@@ -544,6 +722,7 @@ final class C2paRegionOfInterest {
     }
   }
 
+  /// Parses a region of interest from its CBOR map representation.
   factory C2paRegionOfInterest.fromCbor(Object? value) {
     final map = _map(value, 'region of interest');
     return C2paRegionOfInterest(
@@ -568,14 +747,31 @@ final class C2paRegionOfInterest {
     );
   }
 
+  /// Non-empty ranges stored under the C2PA `region` key.
   final List<C2paRegionRange> regions;
+
+  /// Optional human-readable region name; null omits `name`.
   final String? name;
+
+  /// Optional stable region identifier; null omits `identifier`.
   final String? identifier;
+
+  /// Optional region type string; null omits `type`.
   final String? type;
+
+  /// Optional role describing how this value is used.
   final String? role;
+
+  /// Optional human-readable region description.
   final String? description;
+
+  /// Optional extension metadata for the region.
   final Map<String, Object?>? metadata;
+
+  /// Extension fields preserved from decoding and re-emitted unchanged.
   final Map<String, Object?> unknownFields;
+
+  /// Encodes this value as the CBOR map shape used by C2PA.
   Map<String, Object?> toCborMap() => {
     ...unknownFields,
     'region': regions.map((item) => item.toCborMap()).toList(),
@@ -610,9 +806,13 @@ final class C2paRegionOfInterest {
   );
 }
 
+/// Inclusive media time span used by a soft-binding scope.
 final class C2paSoftBindingTimespan {
+  /// Creates a non-negative time span whose end is not before its start.
   const C2paSoftBindingTimespan({required this.start, required this.end})
     : assert(start >= 0 && end >= start);
+
+  /// Parses a soft-binding time span from a CBOR map.
   factory C2paSoftBindingTimespan.fromCbor(Object? value) {
     final map = _map(value, 'soft binding timespan');
     final start = _requiredInt(map, 'start');
@@ -622,8 +822,14 @@ final class C2paSoftBindingTimespan {
     }
     return C2paSoftBindingTimespan(start: start, end: end);
   }
+
+  /// Inclusive start position; must be zero or greater.
   final int start;
+
+  /// Inclusive end position; must be greater than or equal to start.
   final int end;
+
+  /// Encodes this time span as a CBOR-compatible map.
   Map<String, Object?> toCborMap() => {'start': start, 'end': end};
   @override
   bool operator ==(Object other) =>
@@ -634,13 +840,17 @@ final class C2paSoftBindingTimespan {
   int get hashCode => Object.hash(start, end);
 }
 
+/// Scope that limits where a soft-binding block applies.
 final class C2paSoftBindingScope {
+  /// Creates a soft-binding scope with optional time, region, and extent data.
   C2paSoftBindingScope({
     this.timespan,
     this.region,
     this.extent,
     Map<String, Object?> unknownFields = const {},
   }) : unknownFields = freezeJsonMap(unknownFields);
+
+  /// Parses a soft-binding scope from its CBOR map representation.
   factory C2paSoftBindingScope.fromCbor(Object? value) {
     final map = _map(value, 'soft binding scope');
     return C2paSoftBindingScope(
@@ -654,10 +864,20 @@ final class C2paSoftBindingScope {
       unknownFields: _unknown(map, const {'timespan', 'region', 'extent'}),
     );
   }
+
+  /// Optional time span covered by the soft binding.
   final C2paSoftBindingTimespan? timespan;
+
+  /// Optional region covered by the soft binding.
   final C2paRegionOfInterest? region;
+
+  /// Optional textual extent value; null omits `extent`.
   final String? extent;
+
+  /// Extension fields preserved from decoding and re-emitted unchanged.
   final Map<String, Object?> unknownFields;
+
+  /// Encodes this value as the CBOR map shape used by C2PA.
   Map<String, Object?> toCborMap() => {
     ...unknownFields,
     if (timespan != null) 'timespan': timespan!.toCborMap(),
@@ -676,7 +896,11 @@ final class C2paSoftBindingScope {
       Object.hash(timespan, region, extent, deepHash(unknownFields));
 }
 
+/// Single scoped value inside a soft-binding assertion.
 final class C2paSoftBindingBlock {
+  /// Creates a soft-binding block.
+  ///
+  /// Throws FormatException when the block value is empty.
   C2paSoftBindingBlock({
     required this.scope,
     required this.value,
@@ -686,6 +910,8 @@ final class C2paSoftBindingBlock {
       throw const FormatException('Soft binding block value is empty');
     }
   }
+
+  /// Parses a soft-binding block from its CBOR map representation.
   factory C2paSoftBindingBlock.fromCbor(Object? value) {
     final map = _map(value, 'soft binding block');
     return C2paSoftBindingBlock(
@@ -694,9 +920,17 @@ final class C2paSoftBindingBlock {
       unknownFields: _unknown(map, const {'scope', 'value'}),
     );
   }
+
+  /// Scope that identifies where the block value applies.
   final C2paSoftBindingScope scope;
+
+  /// Non-empty soft-binding value for the selected scope.
   final String value;
+
+  /// Extension fields preserved from decoding and re-emitted unchanged.
   final Map<String, Object?> unknownFields;
+
+  /// Encodes this value as the CBOR map shape used by C2PA.
   Map<String, Object?> toCborMap() => {
     ...unknownFields,
     'scope': scope.toCborMap(),
@@ -712,7 +946,11 @@ final class C2paSoftBindingBlock {
   int get hashCode => Object.hash(scope, value, deepHash(unknownFields));
 }
 
+/// CBOR assertion for the `c2pa.soft-binding` label.
 final class C2paSoftBindingAssertion implements C2paStandardAssertion {
+  /// Creates a soft-binding assertion with one or more blocks.
+  ///
+  /// Throws FormatException when no blocks are supplied.
   C2paSoftBindingAssertion({
     required Iterable<C2paSoftBindingBlock> blocks,
     this.algorithm,
@@ -733,6 +971,7 @@ final class C2paSoftBindingAssertion implements C2paStandardAssertion {
     }
   }
 
+  /// Parses a soft-binding assertion from a CBOR map.
   factory C2paSoftBindingAssertion.fromCbor(Object? value) {
     final map = _map(value, 'soft binding');
     return C2paSoftBindingAssertion(
@@ -755,14 +994,31 @@ final class C2paSoftBindingAssertion implements C2paStandardAssertion {
     );
   }
 
+  /// Assertion label for C2PA soft-binding assertions.
   static const baseLabel = 'c2pa.soft-binding';
+
+  /// Optional algorithm identifier serialized as `alg`.
   final String? algorithm;
+
+  /// Non-empty soft-binding blocks serialized under `blocks`.
   final List<C2paSoftBindingBlock> blocks;
+
+  /// Optional human-readable region name; null omits `name`.
   final String? name;
+
+  /// Optional algorithm parameter string serialized as `alg-params`.
   final String? algorithmParameters;
+
+  /// Optional padding bytes serialized as `pad` when non-empty.
   final Uint8List pad;
+
+  /// Optional second padding byte string serialized as `pad2`.
   final Uint8List? pad2;
+
+  /// Optional external URL associated with the soft binding.
   final String? url;
+
+  /// Extension fields preserved from decoding and re-emitted unchanged.
   final Map<String, Object?> unknownFields;
   @override
   String get label => baseLabel;
@@ -782,6 +1038,8 @@ final class C2paSoftBindingAssertion implements C2paStandardAssertion {
     if (pad2 != null) 'pad2': Uint8List.fromList(pad2!),
     if (url != null) 'url': url,
   };
+
+  /// Encodes this assertion as a CBOR-compatible map.
   Map<String, Object?> toCborMap() => toAssertionData();
   @override
   bool operator ==(Object other) =>
@@ -807,7 +1065,11 @@ final class C2paSoftBindingAssertion implements C2paStandardAssertion {
   );
 }
 
+/// Opaque binary assertion data with an explicit label and MIME type.
 class C2paEmbeddedData implements C2paStandardAssertion {
+  /// Creates an embedded binary assertion.
+  ///
+  /// Throws FormatException when the label or content type is empty.
   C2paEmbeddedData({
     required this.label,
     required this.contentType,
@@ -823,6 +1085,8 @@ class C2paEmbeddedData implements C2paStandardAssertion {
   final String label;
   @override
   final String? contentType;
+
+  /// Immutable assertion bytes copied from the constructor input.
   final Uint8List bytes;
   @override
   C2paStandardAssertionEncoding get encoding =>
@@ -839,14 +1103,27 @@ class C2paEmbeddedData implements C2paStandardAssertion {
   int get hashCode => Object.hash(label, contentType, deepHash(bytes));
 }
 
-enum C2paThumbnailKind { claim, ingredient }
+/// Thumbnail assertion target represented by a C2PA thumbnail label.
+enum C2paThumbnailKind {
+  /// Thumbnail for the claim asset.
+  claim,
 
+  /// Thumbnail for an ingredient asset.
+  ingredient,
+}
+
+/// Embedded thumbnail assertion for a claim or ingredient.
 final class C2paThumbnail extends C2paEmbeddedData {
+  /// Creates a thumbnail and derives its C2PA label from the media type.
+  ///
+  /// Throws FormatException for unsupported thumbnail media types.
   C2paThumbnail({
     required this.kind,
     required String mediaType,
     required super.bytes,
   }) : super(label: _thumbnailLabel(kind, mediaType), contentType: mediaType);
+
+  /// Interprets embedded data whose label uses a C2PA thumbnail prefix.
   factory C2paThumbnail.fromEmbedded(C2paEmbeddedData data) {
     final kind = data.label.startsWith('c2pa.thumbnail.ingredient')
         ? C2paThumbnailKind.ingredient
@@ -864,10 +1141,16 @@ final class C2paThumbnail extends C2paEmbeddedData {
     required String mediaType,
     required super.bytes,
   }) : super(contentType: mediaType);
+
+  /// Thumbnail target represented by the derived label.
   final C2paThumbnailKind kind;
 }
 
+/// Single absolute URI entry in an asset-reference assertion.
 final class C2paAssetReferenceEntry {
+  /// Creates an asset reference entry.
+  ///
+  /// Throws FormatException when the URI is not absolute.
   C2paAssetReferenceEntry({
     required this.uri,
     this.description,
@@ -880,6 +1163,8 @@ final class C2paAssetReferenceEntry {
       throw FormatException('Asset reference must be an absolute URI: $uri');
     }
   }
+
+  /// Parses an asset reference entry from its CBOR map representation.
   factory C2paAssetReferenceEntry.fromCbor(Object? value) {
     final map = _map(value, 'asset reference');
     final reference = _map(map['reference'], 'asset reference URI');
@@ -890,10 +1175,20 @@ final class C2paAssetReferenceEntry {
       unknownFields: _unknown(map, const {'reference', 'description'}),
     );
   }
+
+  /// Absolute referenced asset URI.
   final String uri;
+
+  /// Optional human-readable reference description.
   final String? description;
+
+  /// Extension fields preserved inside the nested `reference` map.
   final Map<String, Object?> referenceUnknownFields;
+
+  /// Extension fields preserved from decoding and re-emitted unchanged.
   final Map<String, Object?> unknownFields;
+
+  /// Encodes this value as the CBOR map shape used by C2PA.
   Map<String, Object?> toCborMap() => {
     ...unknownFields,
     'reference': {...referenceUnknownFields, 'uri': uri},
@@ -915,7 +1210,11 @@ final class C2paAssetReferenceEntry {
   );
 }
 
+/// CBOR assertion for the `c2pa.asset-ref` label.
 final class C2paAssetReferenceAssertion implements C2paStandardAssertion {
+  /// Creates an asset-reference assertion.
+  ///
+  /// Throws FormatException when no references are supplied.
   C2paAssetReferenceAssertion({
     required Iterable<C2paAssetReferenceEntry> references,
     Map<String, Object?> unknownFields = const {},
@@ -925,6 +1224,8 @@ final class C2paAssetReferenceAssertion implements C2paStandardAssertion {
       throw const FormatException('Asset reference list cannot be empty');
     }
   }
+
+  /// Parses an asset-reference assertion from a CBOR map.
   factory C2paAssetReferenceAssertion.fromCbor(Object? value) {
     final map = _map(value, 'asset reference assertion');
     return C2paAssetReferenceAssertion(
@@ -935,10 +1236,18 @@ final class C2paAssetReferenceAssertion implements C2paStandardAssertion {
       unknownFields: _unknown(map, const {'references'}),
     );
   }
+
+  /// Parses an asset-reference assertion from a JSON-like map.
   factory C2paAssetReferenceAssertion.fromJson(Map<String, Object?> value) =>
       C2paAssetReferenceAssertion.fromCbor(value);
+
+  /// Assertion label for C2PA asset-reference assertions.
   static const baseLabel = 'c2pa.asset-ref';
+
+  /// Non-empty asset references serialized under `references`.
   final List<C2paAssetReferenceEntry> references;
+
+  /// Extension fields preserved from decoding and re-emitted unchanged.
   final Map<String, Object?> unknownFields;
   @override
   String get label => baseLabel;
@@ -952,7 +1261,11 @@ final class C2paAssetReferenceAssertion implements C2paStandardAssertion {
     ...unknownFields,
     'references': references.map((item) => item.toCborMap()).toList(),
   };
+
+  /// Encodes this assertion as a CBOR-compatible map.
   Map<String, Object?> toCborMap() => toAssertionData();
+
+  /// Encodes this assertion as a JSON-compatible map.
   Map<String, Object?> toJson() => toAssertionData();
   @override
   bool operator ==(Object other) =>
@@ -964,7 +1277,11 @@ final class C2paAssetReferenceAssertion implements C2paStandardAssertion {
       Object.hash(deepHash(references), deepHash(unknownFields));
 }
 
+/// Asset type entry inside a `c2pa.asset-type.v1` assertion.
 final class C2paAssetType {
+  /// Creates an asset type entry.
+  ///
+  /// Throws FormatException when the type string is empty.
   C2paAssetType({
     required this.type,
     this.version,
@@ -972,6 +1289,8 @@ final class C2paAssetType {
   }) : unknownFields = freezeJsonMap(unknownFields) {
     if (type.isEmpty) throw const FormatException('Asset type is empty');
   }
+
+  /// Parses an asset type entry from its CBOR map representation.
   factory C2paAssetType.fromCbor(Object? value) {
     final map = _map(value, 'asset type');
     return C2paAssetType(
@@ -980,9 +1299,17 @@ final class C2paAssetType {
       unknownFields: _unknown(map, const {'type', 'version'}),
     );
   }
+
+  /// Type discriminator serialized in the source map; must be non-empty.
   final String type;
+
+  /// Optional asset type version string; null omits `version`.
   final String? version;
+
+  /// Extension fields preserved from decoding and re-emitted unchanged.
   final Map<String, Object?> unknownFields;
+
+  /// Encodes this value as the CBOR map shape used by C2PA.
   Map<String, Object?> toCborMap() => {
     ...unknownFields,
     'type': type,
@@ -998,7 +1325,11 @@ final class C2paAssetType {
   int get hashCode => Object.hash(type, version, deepHash(unknownFields));
 }
 
+/// CBOR assertion for the `c2pa.asset-type.v1` label.
 final class C2paAssetTypesAssertion implements C2paStandardAssertion {
+  /// Creates an asset-types assertion with one or more type entries.
+  ///
+  /// Throws FormatException when version is not 1 or no types are supplied.
   C2paAssetTypesAssertion({
     required Iterable<C2paAssetType> types,
     this.metadata,
@@ -1012,6 +1343,8 @@ final class C2paAssetTypesAssertion implements C2paStandardAssertion {
       );
     }
   }
+
+  /// Parses an asset-types assertion from a CBOR map.
   factory C2paAssetTypesAssertion.fromCbor(Object? value, {int version = 1}) {
     final map = _map(value, 'asset types assertion');
     return C2paAssetTypesAssertion(
@@ -1023,14 +1356,26 @@ final class C2paAssetTypesAssertion implements C2paStandardAssertion {
       unknownFields: _unknown(map, const {'types', 'metadata'}),
     );
   }
+
+  /// Parses an asset-types assertion from a JSON-like map.
   factory C2paAssetTypesAssertion.fromJson(
     Map<String, Object?> value, {
     int version = 1,
   }) => C2paAssetTypesAssertion.fromCbor(value, version: version);
+
+  /// Base assertion label used to form `c2pa.asset-type.v1`.
   static const baseLabel = 'c2pa.asset-type';
+
+  /// Version suffix encoded in the assertion label; only version 1 is accepted.
   final int version;
+
+  /// Non-empty asset type entries serialized under `types`.
   final List<C2paAssetType> types;
+
+  /// Optional assertion metadata serialized under `metadata`.
   final C2paAssertionMetadata? metadata;
+
+  /// Extension fields preserved from decoding and re-emitted unchanged.
   final Map<String, Object?> unknownFields;
   @override
   String get label => version == 1 ? '$baseLabel.v1' : '$baseLabel.v$version';
@@ -1045,7 +1390,11 @@ final class C2paAssetTypesAssertion implements C2paStandardAssertion {
     'types': types.map((item) => item.toCborMap()).toList(),
     if (metadata != null) 'metadata': metadata!.toAssertionData(),
   };
+
+  /// Encodes this assertion as a CBOR-compatible map.
   Map<String, Object?> toCborMap() => toAssertionData();
+
+  /// Encodes this assertion as a JSON-compatible map.
   Map<String, Object?> toJson() => toAssertionData();
   @override
   bool operator ==(Object other) =>
@@ -1059,7 +1408,11 @@ final class C2paAssetTypesAssertion implements C2paStandardAssertion {
       Object.hash(version, deepHash(types), metadata, deepHash(unknownFields));
 }
 
+/// CBOR assertion for the `c2pa.time-stamp` label.
 final class C2paTimestampAssertion implements C2paStandardAssertion {
+  /// Creates a timestamp assertion from timestamp tokens keyed by identifier.
+  ///
+  /// Throws FormatException when any identifier or token is empty.
   C2paTimestampAssertion(Map<String, Uint8List> timestamps)
     : timestamps = Map<String, Uint8List>.unmodifiable(
         timestamps.map(
@@ -1075,6 +1428,8 @@ final class C2paTimestampAssertion implements C2paStandardAssertion {
       );
     }
   }
+
+  /// Parses a timestamp assertion from a CBOR map of byte strings.
   factory C2paTimestampAssertion.fromCbor(Object? value) {
     final map = _map(value, 'timestamp assertion');
     return C2paTimestampAssertion({
@@ -1082,7 +1437,11 @@ final class C2paTimestampAssertion implements C2paStandardAssertion {
         entry.key: _bytes(entry.value, 'timestamp token'),
     });
   }
+
+  /// Assertion label for C2PA timestamp assertions.
   static const baseLabel = 'c2pa.time-stamp';
+
+  /// Timestamp tokens keyed by non-empty timestamp identifier.
   final Map<String, Uint8List> timestamps;
   @override
   String get label => baseLabel;
@@ -1096,6 +1455,8 @@ final class C2paTimestampAssertion implements C2paStandardAssertion {
     for (final entry in timestamps.entries)
       entry.key: Uint8List.fromList(entry.value),
   };
+
+  /// Encodes this assertion as a CBOR-compatible map.
   Map<String, Object?> toCborMap() => toAssertionData();
   @override
   bool operator ==(Object other) =>
@@ -1105,7 +1466,9 @@ final class C2paTimestampAssertion implements C2paStandardAssertion {
   int get hashCode => deepHash(timestamps);
 }
 
+/// CBOR assertion for the `c2pa.certificate-status` label.
 final class C2paCertificateStatusAssertion implements C2paStandardAssertion {
+  /// Creates a certificate-status assertion from OCSP response values.
   C2paCertificateStatusAssertion({
     required Iterable<Uint8List> ocspValues,
     Map<String, Object?> unknownFields = const {},
@@ -1115,6 +1478,8 @@ final class C2paCertificateStatusAssertion implements C2paStandardAssertion {
          ),
        ),
        unknownFields = freezeJsonMap(unknownFields);
+
+  /// Parses certificate status from CBOR `ocspVals` byte strings.
   factory C2paCertificateStatusAssertion.fromCbor(Object? value) {
     final map = _map(value, 'certificate status assertion');
     return C2paCertificateStatusAssertion(
@@ -1125,6 +1490,8 @@ final class C2paCertificateStatusAssertion implements C2paStandardAssertion {
       unknownFields: _unknown(map, const {'ocspVals'}),
     );
   }
+
+  /// Parses certificate status from JSON base64 `ocspVals` strings.
   factory C2paCertificateStatusAssertion.fromJson(Map<String, Object?> json) =>
       C2paCertificateStatusAssertion(
         ocspValues: _requiredList(json, 'ocspVals').map((item) {
@@ -1141,8 +1508,14 @@ final class C2paCertificateStatusAssertion implements C2paStandardAssertion {
         }),
         unknownFields: _unknown(json, const {'ocspVals'}),
       );
+
+  /// Assertion label for C2PA certificate-status assertions.
   static const baseLabel = 'c2pa.certificate-status';
+
+  /// OCSP response values serialized under `ocspVals`.
   final List<Uint8List> ocspValues;
+
+  /// Extension fields preserved from decoding and re-emitted unchanged.
   final Map<String, Object?> unknownFields;
   @override
   String get label => baseLabel;
@@ -1156,7 +1529,11 @@ final class C2paCertificateStatusAssertion implements C2paStandardAssertion {
     ...unknownFields,
     'ocspVals': ocspValues.map(Uint8List.fromList).toList(),
   };
+
+  /// Encodes this assertion as a CBOR-compatible map.
   Map<String, Object?> toCborMap() => toAssertionData();
+
+  /// Encodes this assertion as JSON with OCSP values base64 encoded.
   Map<String, Object?> toJson() => {
     ...unknownFields,
     'ocspVals': ocspValues.map(base64.encode).toList(),
@@ -1171,9 +1548,24 @@ final class C2paCertificateStatusAssertion implements C2paStandardAssertion {
       Object.hash(deepHash(ocspValues), deepHash(unknownFields));
 }
 
-enum C2paLegacyAssertionKind { exif, creativeWork, schemaOrg }
+/// Legacy JSON assertion namespace represented by the assertion label.
+enum C2paLegacyAssertionKind {
+  /// Legacy `stds.exif` metadata assertion.
+  exif,
 
+  /// Legacy Schema.org CreativeWork assertion.
+  creativeWork,
+
+  /// Legacy generic `schema.org` assertion.
+  schemaOrg,
+}
+
+/// Legacy JSON assertion using historical C2PA or Schema.org labels.
 final class C2paLegacyJsonAssertion implements C2paStandardAssertion {
+  /// Creates a legacy JSON assertion with validation for known kinds.
+  ///
+  /// Throws FormatException when the label is empty or required `@type`
+  /// values are missing for CreativeWork or Schema.org assertions.
   C2paLegacyJsonAssertion({
     required this.kind,
     required Map<String, Object?> value,
@@ -1192,6 +1584,8 @@ final class C2paLegacyJsonAssertion implements C2paStandardAssertion {
       throw const FormatException('Schema.org assertion requires @type');
     }
   }
+
+  /// Parses a legacy JSON assertion and infers its kind from the label.
   factory C2paLegacyJsonAssertion.fromJson({
     required String label,
     required Map<String, Object?> value,
@@ -1204,9 +1598,13 @@ final class C2paLegacyJsonAssertion implements C2paStandardAssertion {
     value: value,
     label: label,
   );
+
+  /// Legacy namespace selected for this JSON assertion.
   final C2paLegacyAssertionKind kind;
   @override
   final String label;
+
+  /// JSON payload emitted unchanged for this legacy assertion.
   final Map<String, Object?> value;
   @override
   C2paStandardAssertionEncoding get encoding =>
@@ -1215,6 +1613,8 @@ final class C2paLegacyJsonAssertion implements C2paStandardAssertion {
   String? get contentType => 'application/json';
   @override
   Map<String, Object?> toAssertionData() => value;
+
+  /// Encodes this legacy assertion as a JSON-compatible map.
   Map<String, Object?> toJson() => value;
   @override
   bool operator ==(Object other) =>

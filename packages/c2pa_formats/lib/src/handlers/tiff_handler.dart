@@ -10,6 +10,10 @@ import '../hash_layout.dart';
 import '../xmp.dart';
 import '../xmp_remote_reference.dart';
 
+/// A TIFF and DNG handler for C2PA IFD entries.
+///
+/// The manifest is stored in TIFF tag `0xCD41` as offset data. XMP is stored in
+/// tag `0x02BC`; BigTIFF is rejected by this handler.
 final class TiffAssetHandler
     implements
         AssetHandler,
@@ -17,6 +21,7 @@ final class TiffAssetHandler
         BoxHashLayoutProvider,
         XmpMetadataProvider,
         RemoteManifestReferenceProvider {
+  /// Creates a TIFF/DNG handler with IFD and byte limits.
   const TiffAssetHandler({
     this.maxManifestSize = 64 * 1024 * 1024,
     this.maxSourceSize = 256 * 1024 * 1024,
@@ -47,13 +52,28 @@ final class TiffAssetHandler
   };
   static const int _maximumClassicOffset = 0xffffffff;
 
+  /// Maximum embedded C2PA manifest size in bytes.
   final int maxManifestSize;
+
+  /// Maximum source asset size in bytes.
   final int maxSourceSize;
+
+  /// Maximum rewritten asset size in bytes.
   final int maxOutputSize;
+
+  /// Maximum number of IFDs parsed from the asset.
   final int maxIfdCount;
+
+  /// Maximum number of entries allowed in one IFD.
   final int maxEntriesPerIfd;
+
+  /// Maximum number of referenced IFDs followed while scanning.
   final int maxReferencedIfds;
+
+  /// Maximum XMP packet size in bytes.
   final int maxXmpSize;
+
+  /// Maximum UTF-8 length of a remote reference in bytes.
   final int maxRemoteReferenceLength;
 
   @override

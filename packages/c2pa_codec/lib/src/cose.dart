@@ -9,17 +9,34 @@ final BigInt _maxSafeIntegerBig = BigInt.from(_maxSafeInteger);
 
 /// An integer COSE header label.
 final class CoseHeaderLabel {
+  /// Creates a COSE header label with integer [value] and optional [name].
   const CoseHeaderLabel(this.value, [this.name]);
 
+  /// The protected algorithm header label, `1` (`alg`).
   static const algorithm = CoseHeaderLabel(1, 'alg');
+
+  /// Alias for [algorithm].
   static const alg = algorithm;
+
+  /// The content-type header label, `3`.
   static const contentType = CoseHeaderLabel(3, 'content type');
+
+  /// The key identifier header label, `4` (`kid`).
   static const keyId = CoseHeaderLabel(4, 'kid');
+
+  /// Alias for [keyId].
   static const kid = keyId;
+
+  /// The X.509 certificate chain header label, `33` (`x5chain`).
   static const x509Chain = CoseHeaderLabel(33, 'x5chain');
+
+  /// Alias for [x509Chain].
   static const x5chain = x509Chain;
 
+  /// The integer label encoded into the COSE header map.
   final int value;
+
+  /// A display name for diagnostics, or `null` for unnamed labels.
   final String? name;
 
   /// Creates a label for an extension not defined by this package.
@@ -39,17 +56,26 @@ final class CoseHeaderLabel {
 
 /// Standard integer header labels used by C2PA COSE messages.
 abstract final class CoseHeaderLabels {
+  /// The protected algorithm header label, `1` (`alg`).
   static const alg = CoseHeaderLabel.algorithm;
+
+  /// The content-type header label, `3`.
   static const contentType = CoseHeaderLabel.contentType;
+
+  /// The key identifier header label, `4` (`kid`).
   static const kid = CoseHeaderLabel.keyId;
+
+  /// The X.509 certificate chain header label, `33` (`x5chain`).
   static const x5chain = CoseHeaderLabel.x509Chain;
 
+  /// Creates a label for an extension not defined by this package.
   static CoseHeaderLabel custom(int value, {String? name}) =>
       CoseHeaderLabel.custom(value, name: name);
 }
 
 /// An immutable collection of integer-labeled COSE headers.
 final class CoseHeaders {
+  /// Creates immutable COSE headers from [values].
   CoseHeaders([Map<CoseHeaderLabel, Object?> values = const {}])
     : _values = Map<CoseHeaderLabel, Object?>.unmodifiable(
         values.map(
@@ -62,18 +88,26 @@ final class CoseHeaders {
     _validateHeaders(_values);
   }
 
+  /// Creates immutable COSE headers from integer label [values].
   factory CoseHeaders.fromIntMap(Map<int, Object?> values) => CoseHeaders(
     values.map((key, value) => MapEntry(CoseHeaderLabel.custom(key), value)),
   );
 
   final Map<CoseHeaderLabel, Object?> _values;
 
+  /// The number of header labels in this collection.
   int get length => _values.length;
+
+  /// Whether this collection contains no header labels.
   bool get isEmpty => _values.isEmpty;
+
+  /// Whether [label] is present in this collection.
   bool contains(CoseHeaderLabel label) => _values.containsKey(label);
 
+  /// A defensive copy of the value for [label], or `null` if absent.
   Object? operator [](CoseHeaderLabel label) => _copyValue(_values[label]);
 
+  /// An immutable copy of all header values keyed by [CoseHeaderLabel].
   Map<CoseHeaderLabel, Object?> get values =>
       Map<CoseHeaderLabel, Object?>.unmodifiable(
         _values.map((key, value) => MapEntry(key, _copyValue(value))),
@@ -88,6 +122,7 @@ final class CoseHeaders {
 
 /// An immutable COSE_Sign1 message.
 final class CoseSign1 {
+  /// Creates a COSE_Sign1 message with protected and unprotected headers.
   CoseSign1({
     required CoseHeaders protectedHeaders,
     CoseHeaders? unprotectedHeaders,
@@ -116,7 +151,10 @@ final class CoseSign1 {
        _signature = Uint8List.fromList(signature),
        _rawBytes = Uint8List.fromList(rawBytes);
 
+  /// The protected header bucket covered by the COSE signature.
   final CoseHeaders protectedHeaders;
+
+  /// The unprotected header bucket excluded from the COSE signature.
   final CoseHeaders unprotectedHeaders;
   final Uint8List _protectedBytes;
   final Uint8List? _payload;
@@ -133,6 +171,7 @@ final class CoseSign1 {
   Uint8List? get payload =>
       _payload == null ? null : Uint8List.fromList(_payload);
 
+  /// The signature bytes from the fourth COSE_Sign1 array element.
   Uint8List get signature => Uint8List.fromList(_signature);
 
   /// Parses one tagged or untagged COSE_Sign1 message.

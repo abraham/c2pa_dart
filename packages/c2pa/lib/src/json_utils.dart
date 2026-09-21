@@ -1,8 +1,10 @@
 import 'dart:collection';
 import 'dart:typed_data';
 
+/// String-keyed JSON-like map used by public model objects.
 typedef JsonMap = Map<String, Object?>;
 
+/// Recursively freezes JSON-like maps, lists, and byte arrays.
 Object? freezeJson(Object? value) {
   return switch (value) {
     final Uint8List bytes => Uint8List.fromList(bytes).asUnmodifiableView(),
@@ -16,9 +18,11 @@ Object? freezeJson(Object? value) {
   };
 }
 
+/// Freezes [value] and returns it as an immutable [JsonMap].
 JsonMap freezeJsonMap(Map<String, Object?> value) =>
     freezeJson(value)! as JsonMap;
 
+/// Copies fields whose keys are not in [knownKeys].
 JsonMap unknownFields(Map<String, Object?> json, Set<String> knownKeys) =>
     freezeJsonMap(
       Map<String, Object?>.fromEntries(
@@ -26,6 +30,7 @@ JsonMap unknownFields(Map<String, Object?> json, Set<String> knownKeys) =>
       ),
     );
 
+/// Compares JSON-like lists and maps by deep value.
 bool deepEquals(Object? left, Object? right) {
   if (identical(left, right)) return true;
   if (left is List && right is List) {
@@ -42,6 +47,7 @@ bool deepEquals(Object? left, Object? right) {
   return left == right;
 }
 
+/// Computes a stable deep hash for JSON-like values.
 int deepHash(Object? value) {
   if (value is List) return Object.hashAll(value.map(deepHash));
   if (value is Map) {
@@ -54,6 +60,7 @@ int deepHash(Object? value) {
   return value.hashCode;
 }
 
+/// Finds an enum value whose `name` matches [name].
 T? enumByName<T extends Enum>(Iterable<T> values, Object? name) {
   if (name is! String) return null;
   for (final value in values) {

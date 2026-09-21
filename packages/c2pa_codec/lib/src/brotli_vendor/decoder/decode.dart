@@ -2055,6 +2055,7 @@ List<int> brotliDecode(List<int> data) => brotli.decode(data);
 /// The [BrotliCodec] encodes raw bytes to Brotli compressed bytes and
 /// decodes Brotli compressed bytes to raw bytes.
 class BrotliCodec extends Codec<List<int>, List<int>> {
+  /// Compound dictionary bytes used while decoding.
   final List<int> compoundDictionary;
 
   /// Instantiates a new [BrotliCodec].
@@ -2196,6 +2197,7 @@ void _decodeToSink(
 
 /// Converts Brotli compressed bytes to raw bytes.
 class BrotliDecoder extends Converter<List<int>, List<int>> {
+  /// Compound dictionary bytes used while decoding.
   final List<int> compoundDictionary;
 
   /// Instantiates a new [BrotliDecoder].

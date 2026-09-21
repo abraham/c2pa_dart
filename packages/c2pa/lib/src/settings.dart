@@ -1,8 +1,12 @@
 /// Conservative limits used while reading and validating C2PA data.
 final class C2paSettings {
+  /// Default decompressed manifest limit: 32 MiB.
   static const int defaultMaxDecompressedManifestBytes = 32 * 1024 * 1024;
+
+  /// Hard decompressed manifest limit: 1 GiB.
   static const int maximumDecompressedManifestBytes = 1024 * 1024 * 1024;
 
+  /// Creates settings with conservative resource and network defaults.
   const C2paSettings({
     this.maxResourceBytes = 50 * 1024 * 1024,
     this.maxTotalResourceBytes = 200 * 1024 * 1024,
@@ -43,6 +47,7 @@ final class C2paSettings {
        assert(maxIngredientDepth >= 0),
        assert(maxIngredientCount >= 0);
 
+  /// Creates settings from JSON, using defaults for missing or mistyped values.
   factory C2paSettings.fromJson(Map<String, Object?> json) {
     int integer(String key, int fallback) => switch (json[key]) {
       final int value => value,
@@ -94,25 +99,61 @@ final class C2paSettings {
     );
   }
 
+  /// Maximum bytes allowed for one embedded resource; default 50 MiB.
   final int maxResourceBytes;
+
+  /// Maximum combined embedded resource bytes; default 200 MiB.
   final int maxTotalResourceBytes;
+
+  /// Maximum embedded resource count; default 1024.
   final int maxResourceCount;
+
+  /// Whether remote manifest and OCSP network fetches are allowed.
   final bool allowNetworkAccess;
+
+  /// Maximum bytes read from one network response; default 10 MiB.
   final int maxNetworkBytes;
+
+  /// Overall timeout for network requests; default 10 seconds.
   final Duration networkTimeout;
+
+  /// Maximum HTTP redirects followed for remote manifests; default 3.
   final int maxRedirects;
+
+  /// Whether missing OCSP responses may be fetched over the network.
   final bool enableOcspFetch;
+
+  /// Maximum OCSP request size in bytes; default 16 KiB.
   final int maxOcspRequestBytes;
+
+  /// Maximum OCSP response size in bytes; default 1 MiB.
   final int maxOcspResponseBytes;
+
+  /// Maximum OCSP age without `nextUpdate`; default 24 hours.
   final Duration ocspMaxAgeWithoutNextUpdate;
+
+  /// Allowed OCSP clock skew; default 5 minutes.
   final Duration ocspClockSkew;
+
+  /// Maximum nested JUMBF recursion depth; default 16.
   final int maxRecursionDepth;
+
+  /// Maximum compressed or stored manifest bytes; default 64 MiB.
   final int maxManifestBytes;
+
+  /// Maximum decompressed manifest bytes, capped at 1 GiB.
   final int maxDecompressedManifestBytes;
+
+  /// Maximum JUMBF boxes parsed from one manifest; default 10000.
   final int maxJumbfBoxCount;
+
+  /// Maximum ingredient traversal depth; default 8.
   final int maxIngredientDepth;
+
+  /// Maximum ingredient count traversed; default 1024.
   final int maxIngredientCount;
 
+  /// Creates a copy with the provided settings replaced.
   C2paSettings copyWith({
     int? maxResourceBytes,
     int? maxTotalResourceBytes,
@@ -155,6 +196,7 @@ final class C2paSettings {
     maxIngredientCount: maxIngredientCount ?? this.maxIngredientCount,
   );
 
+  /// Encodes these settings as JSON-compatible values.
   Map<String, Object?> toJson() => {
     'maxResourceBytes': maxResourceBytes,
     'maxTotalResourceBytes': maxTotalResourceBytes,

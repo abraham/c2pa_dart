@@ -7,10 +7,19 @@ import 'settings.dart';
 
 /// Legacy single-request resolver retained for source compatibility.
 abstract interface class RemoteManifestResolver {
+  /// Fetches the remote manifest bytes for [uri].
+  ///
+  /// Performs caller-defined network I/O. A `null` result means the manifest
+  /// was not found; transport failures should throw an [Exception].
   Future<Uint8List?> resolve(Uri uri);
 }
 
+/// A transport request for a remote C2PA manifest.
+///
+/// The SDK validates URI policy before creating this request; transports still
+/// report resolved addresses so redirects and DNS results can be checked.
 final class C2paRemoteRequest {
+  /// Creates an immutable remote manifest request.
   C2paRemoteRequest({
     required this.uri,
     required this.redirectCount,
@@ -20,17 +29,34 @@ final class C2paRemoteRequest {
          acceptedContentTypes.map((value) => value.toLowerCase()),
        );
 
+  /// Absolute URI to fetch for the current request or redirect hop.
+  /// URI being fetched when the transport failure occurred.
+  /// URI rejected by policy validation.
   final Uri uri;
+
+  /// Number of redirects already followed before this request.
   final int redirectCount;
+
+  /// Maximum response body size in bytes allowed by policy.
   final int maximumBytes;
+
+  /// Lower-case MIME types accepted for the manifest response.
   final Set<String> acceptedContentTypes;
 
+  /// HTTP `Accept` header value suitable for this request.
   String get acceptHeader => acceptedContentTypes.isEmpty
       ? 'application/c2pa, application/octet-stream;q=0.9'
       : acceptedContentTypes.join(', ');
 }
 
+/// A transport response containing either manifest bytes or a redirect.
+///
+/// Exactly one of [bytes] and [redirectUri] should be non-null.
 final class C2paRemoteResponse {
+  /// Creates a successful byte response from a transport.
+  ///
+  /// [bytes] are copied defensively. [resolvedAddresses] must contain the IP
+  /// literals contacted by transports that expose DNS metadata.
   C2paRemoteResponse.bytes({
     required List<int> bytes,
     Iterable<String> resolvedAddresses = const [],
@@ -41,6 +67,9 @@ final class C2paRemoteResponse {
        redirectUri = null,
        resolvedAddresses = List<String>.unmodifiable(resolvedAddresses);
 
+  /// Creates an HTTP redirect response from a transport.
+  ///
+  /// [redirectUri] may be relative; policy is revalidated after resolution.
   C2paRemoteResponse.redirect({
     required this.redirectUri,
     Iterable<String> resolvedAddresses = const [],
@@ -50,33 +79,67 @@ final class C2paRemoteResponse {
        contentLength = null,
        resolvedAddresses = List<String>.unmodifiable(resolvedAddresses);
 
+  /// Manifest bytes, or `null` when this response is a redirect.
   final Uint8List? bytes;
+
+  /// Redirect target, or `null` when this response carries bytes.
   final Uri? redirectUri;
+
+  /// HTTP-like status code used to validate success or redirect semantics.
   final int statusCode;
+
+  /// Declared body length in bytes, or `null` when unknown.
   final int? contentLength;
+
+  /// Response MIME type, or `null` when the transport did not provide one.
   final String? contentType;
+
+  /// IP literals reached while resolving or fetching this response.
   final List<String> resolvedAddresses;
 }
 
 /// Caller-injected transport for remote manifests.
 abstract interface class C2paRemoteResolver {
+  /// Performs network I/O for [request] and returns bytes or a redirect.
+  ///
+  /// Throw an [Exception] for transport failures; the SDK wraps it as a
+  /// [C2paRemoteTransportException] unless it is already a C2PA network error.
   Future<C2paRemoteResponse> resolve(C2paRemoteRequest request);
 }
 
+/// Resolver alias for DID-style remote identity documents.
 typedef DidResolver = C2paRemoteResolver;
 
+/// Transport-level failure categories for remote manifest fetches.
 enum C2paRemoteTransportFailure {
+  /// The resolver threw an unexpected transport exception.
   transport,
+
+  /// The resolver reported that no manifest bytes were available.
   notFound,
+
+  /// The resolver returned a structurally inconsistent response.
   invalidResponse,
+
+  /// The response status was not valid for bytes or redirect handling.
   httpStatus,
+
+  /// Redirect processing revisited a previously seen URI.
   redirectLoop,
+
+  /// The response body length did not match the declared length.
   truncated,
+
+  /// The caller's cancellation callback requested termination.
   cancelled,
+
+  /// The resolver did not complete before the configured timeout.
   timeout,
 }
 
+/// Exception thrown when a remote manifest transport fails.
 final class C2paRemoteTransportException extends C2paNetworkException {
+  /// Creates a categorized transport exception for [uri].
   const C2paRemoteTransportException(
     super.message, {
     required this.failure,
@@ -85,23 +148,46 @@ final class C2paRemoteTransportException extends C2paNetworkException {
     super.stackTrace,
   });
 
+  /// Machine-readable reason for the transport failure.
   final C2paRemoteTransportFailure failure;
+
+  /// URI being fetched when the transport failure occurred.
   final Uri uri;
 }
 
+/// Policy violations that can reject a remote manifest URI or response.
 enum RemoteManifestPolicyViolation {
+  /// Remote manifest access is disabled.
   disabled,
+
+  /// The URI is not absolute, lacks a host, or contains user info.
   invalidUri,
+
+  /// The URI scheme is not in the allowed [RemoteManifestPolicy] schemes.
   schemeNotAllowed,
+
+  /// The URI host is not allowed by the policy.
   hostNotAllowed,
+
+  /// The URI port is neither default nor explicitly allowed.
   portNotAllowed,
+
+  /// The URI host is local, private, link-local, or otherwise blocked.
   localAddress,
+
+  /// A resolved IP literal is missing or not allowed by the policy.
   resolvedAddressNotAllowed,
+
+  /// The redirect count exceeded the [RemoteManifestPolicy] maximum.
   tooManyRedirects,
+
+  /// The body or declared length exceeded the [RemoteManifestPolicy] maximum.
   responseTooLarge,
 }
 
+/// Exception thrown when remote manifest policy rejects a URI or response.
 final class C2paUriPolicyException extends C2paNetworkException {
+  /// Creates a policy exception for [uri].
   const C2paUriPolicyException(
     super.message, {
     required this.violation,
@@ -110,7 +196,10 @@ final class C2paUriPolicyException extends C2paNetworkException {
     super.stackTrace,
   });
 
+  /// Machine-readable policy rule that was violated.
   final RemoteManifestPolicyViolation violation;
+
+  /// URI rejected by policy validation.
   final Uri uri;
 }
 
@@ -118,6 +207,9 @@ final class C2paUriPolicyException extends C2paNetworkException {
 ///
 /// The default policy denies every URI. It performs no DNS or network access.
 final class RemoteManifestPolicy {
+  /// Creates a validation-only remote manifest policy.
+  ///
+  /// Throws [ArgumentError] if [maxRedirects] or [maxBytes] is negative.
   RemoteManifestPolicy({
     this.enabled = false,
     Iterable<String> allowedSchemes = const {'https'},
@@ -143,6 +235,7 @@ final class RemoteManifestPolicy {
     }
   }
 
+  /// Creates a policy from SDK [settings] and explicit allow lists.
   factory RemoteManifestPolicy.fromSettings(
     C2paSettings settings, {
     Iterable<String> allowedSchemes = const {'https'},
@@ -182,19 +275,38 @@ final class RemoteManifestPolicy {
     maxBytes: maxBytes,
   );
 
+  /// Whether remote manifest access is permitted at all.
   final bool enabled;
+
+  /// Lower-case URI schemes accepted by the policy.
   final Set<String> allowedSchemes;
+
+  /// Normalized host names accepted by the policy.
   final Set<String> allowedHosts;
+
+  /// Non-default TCP ports accepted by the policy.
   final Set<int> allowedPorts;
+
+  /// Whether subdomains of [allowedHosts] are accepted.
   final bool allowSubdomains;
+
+  /// Whether the current `Uri.base` origin is accepted.
   final bool allowSameOrigin;
 
   /// Explicit opt-in for private networks. Public network policies should
   /// leave this false.
   final bool allowPrivateAddresses;
+
+  /// Maximum number of redirects that may be followed.
   final int maxRedirects;
+
+  /// Maximum allowed remote manifest size in bytes.
   final int maxBytes;
 
+  /// Checks whether [uri] and optional response metadata satisfy the policy.
+  ///
+  /// This method performs no network I/O and returns `false` instead of
+  /// throwing [C2paUriPolicyException].
   bool allows(Uri uri, {int redirectCount = 0, int? byteCount}) {
     try {
       validate(uri, redirectCount: redirectCount, byteCount: byteCount);
@@ -204,6 +316,10 @@ final class RemoteManifestPolicy {
     }
   }
 
+  /// Validates [uri], redirect count, byte count, and resolved addresses.
+  ///
+  /// This method performs no network I/O. Throws [C2paUriPolicyException] when
+  /// any policy rule is violated.
   void validate(
     Uri uri, {
     int redirectCount = 0,
@@ -472,6 +588,13 @@ final class RemoteManifestPolicy {
   );
 }
 
+/// Resolves and validates remote C2PA manifest bytes.
+///
+/// Performs network I/O through [resolver] or [legacyResolver], follows policy-
+/// checked redirects, enforces byte limits, and times each request with
+/// [timeout]. Throws [C2paUriPolicyException] for policy failures and
+/// [C2paRemoteTransportException] for transport, timeout, cancellation, HTTP,
+/// redirect, and truncation failures.
 Future<Uint8List> resolveRemoteManifest({
   required Uri uri,
   required RemoteManifestPolicy policy,

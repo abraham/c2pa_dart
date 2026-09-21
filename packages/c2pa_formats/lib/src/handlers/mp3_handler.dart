@@ -9,11 +9,16 @@ import '../errors.dart';
 import '../xmp.dart';
 import '../xmp_remote_reference.dart';
 
+/// An MP3 handler for C2PA data stored in ID3v2 frames.
+///
+/// The manifest is stored in a GEOB frame with MIME type `application/c2pa`.
+/// XMP metadata is stored in a PRIV frame owned by `XMP`.
 final class Mp3AssetHandler
     implements
         AssetHandler,
         XmpMetadataProvider,
         RemoteManifestReferenceProvider {
+  /// Creates an MP3 handler with ID3 frame and byte limits.
   const Mp3AssetHandler({
     this.maxManifestSize = 64 * 1024 * 1024,
     this.maxSourceSize = 256 * 1024 * 1024,
@@ -30,12 +35,25 @@ final class Mp3AssetHandler
   static const String _description = 'c2pa manifest store';
   static const String _xmpOwner = 'XMP';
 
+  /// Maximum embedded C2PA manifest size in bytes.
   final int maxManifestSize;
+
+  /// Maximum source asset size in bytes.
   final int maxSourceSize;
+
+  /// Maximum rewritten asset size in bytes.
   final int maxOutputSize;
+
+  /// Maximum number of ID3 frames parsed from the leading tag.
   final int maxFrameCount;
+
+  /// Whether non-MPEG payloads after ID3 are accepted, as for FLAC.
   final bool allowNonMpegPayload;
+
+  /// Maximum XMP packet size in bytes.
   final int maxXmpSize;
+
+  /// Maximum UTF-8 length of a remote reference in bytes.
   final int maxRemoteReferenceLength;
 
   @override

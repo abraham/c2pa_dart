@@ -6,11 +6,18 @@ import 'signing_algorithm.dart';
 
 /// Performs signing for one or more algorithms using caller-owned keys.
 abstract interface class CoseSigningBackend {
+  /// Signs the Sig_structure [data] for [algorithm].
+  ///
+  /// Implementations must return raw COSE signature bytes, using fixed-width
+  /// P1363 encoding for ECDSA algorithms.
   Future<List<int>> sign(SigningAlgorithm algorithm, List<int> data);
 }
 
 /// Performs verification for one or more algorithms using caller-owned keys.
 abstract interface class CoseVerificationBackend {
+  /// Verifies raw COSE [signature] bytes over Sig_structure [data].
+  ///
+  /// ECDSA signatures are supplied in fixed-width P1363 encoding.
   Future<bool> verify(
     SigningAlgorithm algorithm,
     List<int> data,
@@ -20,8 +27,10 @@ abstract interface class CoseVerificationBackend {
 
 /// Base class for failures in the COSE cryptographic orchestration layer.
 sealed class CoseCryptoException implements Exception {
+  /// Creates a COSE crypto exception carrying a human-readable [message].
   const CoseCryptoException(this.message);
 
+  /// The human-readable failure detail.
   final String message;
 
   @override
@@ -30,68 +39,92 @@ sealed class CoseCryptoException implements Exception {
 
 /// The protected COSE algorithm identifier is not supported.
 final class UnknownCoseAlgorithmException extends CoseCryptoException {
+  /// Creates an exception for an unsupported protected COSE [coseId].
   UnknownCoseAlgorithmException(this.coseId)
     : super('Unsupported protected COSE algorithm identifier: $coseId');
 
+  /// The unsupported COSE algorithm identifier.
   final int coseId;
 }
 
 /// A COSE algorithm differs from the algorithm required by the caller.
 final class AlgorithmMismatchException extends CoseCryptoException {
+  /// Creates an exception for an expected versus actual algorithm mismatch.
   AlgorithmMismatchException(this.expected, this.actual)
     : super('Expected ${expected.name}, but protected alg is ${actual.name}');
 
+  /// The algorithm required by the caller or protected headers.
   final SigningAlgorithm expected;
+
+  /// The algorithm found in the protected COSE headers.
   final SigningAlgorithm actual;
 }
 
 /// The supplied payload does not match the embedded COSE payload.
 final class PayloadMismatchException extends CoseCryptoException {
+  /// Creates an exception for a detached payload mismatch.
   const PayloadMismatchException()
     : super('The supplied payload does not match the embedded COSE payload');
 }
 
 /// An ECDSA signature does not have the required fixed P1363 width.
 final class InvalidSignatureWidthException extends CoseCryptoException {
+  /// Creates an exception for an ECDSA P1363 signature length mismatch.
   InvalidSignatureWidthException(this.algorithm, this.expected, this.actual)
     : super(
         '${algorithm.name} requires a $expected-byte P1363 signature, '
         'but received $actual bytes',
       );
 
+  /// The algorithm whose fixed signature width was violated.
   final SigningAlgorithm algorithm;
+
+  /// The required signature length in bytes.
   final int expected;
+
+  /// The received signature length in bytes.
   final int actual;
 }
 
 /// No key backend was supplied for the requested algorithm.
 final class UnsupportedBackendException extends CoseCryptoException {
+  /// Creates an exception for a missing backend for [algorithm].
   UnsupportedBackendException(this.algorithm)
     : super('No cryptographic backend is available for ${algorithm.name}');
 
+  /// The algorithm for which no backend was supplied.
   final SigningAlgorithm algorithm;
 }
 
 /// A key is incompatible with the requested signing algorithm.
 final class InvalidKeyForAlgorithmException extends CoseCryptoException {
+  /// Creates an exception for a key rejected for [algorithm].
   InvalidKeyForAlgorithmException(this.algorithm, String detail, {this.cause})
     : super('Key is not valid for ${algorithm.name}: $detail');
 
+  /// The algorithm the key was expected to satisfy.
   final SigningAlgorithm algorithm;
+
+  /// The underlying import or validation error, if one was available.
   final Object? cause;
 }
 
 /// The platform cannot provide the requested cryptographic algorithm.
 final class PlatformAlgorithmUnavailableException extends CoseCryptoException {
+  /// Creates an exception for a platform algorithm lookup failure.
   PlatformAlgorithmUnavailableException(this.algorithm, {this.cause})
     : super('${algorithm.name} is unavailable on this platform');
 
+  /// The algorithm the platform could not provide.
   final SigningAlgorithm algorithm;
+
+  /// The underlying platform error, if one was available.
   final Object? cause;
 }
 
 /// Creates deterministic COSE_Sign1 encodings around injected key operations.
 final class CoseSigner {
+  /// Creates a signer using the supplied algorithm-to-backend map.
   CoseSigner({Map<SigningAlgorithm, CoseSigningBackend> backends = const {}})
     : _backends = Map.unmodifiable(backends);
 
@@ -144,6 +177,7 @@ final class CoseSigner {
 
 /// Verifies COSE_Sign1 messages using algorithm-specific injected backends.
 final class CoseVerifier {
+  /// Creates a verifier using the supplied algorithm-to-backend map.
   CoseVerifier({
     Map<SigningAlgorithm, CoseVerificationBackend> backends = const {},
   }) : _backends = Map.unmodifiable(backends);

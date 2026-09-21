@@ -10,49 +10,121 @@ import 'iso_box.dart';
 
 /// Four-character box types used by the JUMBF and C2PA profiles.
 abstract final class JumbfFourcc {
+  /// The `jumb` JUMBF superbox type.
   static const superBox = 'jumb';
+
+  /// The `jumd` JUMBF description box type.
   static const description = 'jumd';
+
+  /// The `cbor` CBOR content box type.
   static const cbor = 'cbor';
+
+  /// The `json` JSON content box type.
   static const json = 'json';
+
+  /// The `xml ` XML content box type, including its trailing space.
   static const xml = 'xml ';
+
+  /// The `jp2c` JPEG 2000 codestream content box type.
   static const codestream = 'jp2c';
+
+  /// The `uuid` ISO extension box type.
   static const uuid = 'uuid';
+
+  /// The `bfdb` embedded-file description box type.
   static const embeddedFileDescription = 'bfdb';
+
+  /// The `bidb` embedded-file data box type.
   static const embeddedFileData = 'bidb';
+
+  /// The `free` padding box type.
   static const padding = 'free';
+
+  /// The `brob` Brotli-compressed content box type.
   static const brotli = 'brob';
+
+  /// The `c2sh` C2PA salt box type used in `jumd` private data.
   static const salt = 'c2sh';
 }
 
 /// Hexadecimal UUID identifiers registered by JUMBF and C2PA.
 abstract final class JumbfUuid {
+  /// The JUMBF content-type UUID for JPEG 2000 codestream content.
   static const codestream = '6579d6fbdba2446bb2ac1b82feeb89d1';
+
+  /// The JUMBF content-type UUID for JSON content.
   static const json = '6a736f6e00110010800000aa00389b71';
+
+  /// The JUMBF content-type UUID for CBOR content.
   static const cbor = '63626f7200110010800000aa00389b71';
+
+  /// The JUMBF content-type UUID for XML content.
   static const xml = '786d6c2000110010800000aa00389b71';
+
+  /// The JUMBF content-type UUID for UUID content boxes.
   static const uuid = '7575696400110010800000aa00389b71';
+
+  /// The JUMBF content-type UUID for embedded-file superboxes.
   static const embeddedFile = '40cb0c32bb8a489da70b2ad6f47f4369';
+
+  /// The JUMBF content-type UUID for Brotli-compressed content.
   static const brotli = '62726f6200110010800000aa00389b71';
 
+  /// The C2PA manifest-store superbox content-type UUID.
   static const c2paManifestStore = '6332706100110010800000aa00389b71';
+
+  /// The C2PA manifest superbox content-type UUID.
   static const c2paManifest = '63326d6100110010800000aa00389b71';
+
+  /// The legacy C2PA manifest superbox content-type UUID.
   static const c2paLegacyManifest = '63326d6400110010800000aa00389b71';
+
+  /// The C2PA compressed-manifest superbox content-type UUID.
   static const c2paCompressedManifest = '6332636d00110010800000aa00389b71';
+
+  /// The C2PA update-manifest superbox content-type UUID.
   static const c2paUpdateManifest = '6332756d00110010800000aa00389b71';
+
+  /// The C2PA assertion-store superbox content-type UUID.
   static const c2paAssertionStore = '6332617300110010800000aa00389b71';
+
+  /// The C2PA ingredient-store superbox content-type UUID.
   static const c2paIngredientStore = '6361697300110010800000aa00389b71';
+
+  /// The C2PA ingredient superbox content-type UUID.
   static const c2paIngredient = '6361696e00110010800000aa00389b71';
+
+  /// The C2PA claim superbox content-type UUID.
   static const c2paClaim = '6332636c00110010800000aa00389b71';
+
+  /// The C2PA signature superbox content-type UUID.
   static const c2paSignature = '6332637300110010800000aa00389b71';
+
+  /// The C2PA verifiable-credentials superbox content-type UUID.
   static const c2paCredentials = '6332766300110010800000aa00389b71';
+
+  /// The C2PA data-boxes superbox content-type UUID.
   static const c2paDataBoxes = '6332646200110010800000aa00389b71';
+
+  /// The C2PA redaction superbox content-type UUID.
   static const c2paRedaction = 'caa98eee9d4df80e86ad4dffca263973';
+
+  /// The JUMBF content-type UUID for `bfdb` embedded-file descriptions.
   static const embeddedFileDescription = '6266646200110010800000aa00389b71';
+
+  /// The JUMBF content-type UUID for `bidb` embedded-file data.
   static const embeddedFileData = '6269646200110010800000aa00389b71';
 
+  /// The C2PA JSON assertion content-type UUID.
   static const c2paJsonAssertion = json;
+
+  /// The C2PA CBOR assertion content-type UUID.
   static const c2paCborAssertion = cbor;
+
+  /// The C2PA UUID assertion content-type UUID.
   static const c2paUuidAssertion = uuid;
+
+  /// The C2PA embedded-file assertion content-type UUID.
   static const c2paEmbeddedFile = embeddedFile;
 
   /// Converts a 32-character hexadecimal UUID to 16 bytes.
@@ -94,6 +166,7 @@ abstract final class JumbfUuid {
 
 /// A JUMBF description (`jumd`) box.
 final class JumbfDescription {
+  /// Creates a `jumd` box description with a 16-byte [contentType] UUID.
   JumbfDescription({
     required Uint8List contentType,
     this.requestable = true,
@@ -120,6 +193,7 @@ final class JumbfDescription {
     }
   }
 
+  /// Creates a `jumd` box description from a hexadecimal content-type UUID.
   factory JumbfDescription.fromUuidHex({
     required String contentType,
     bool requestable = true,
@@ -137,8 +211,14 @@ final class JumbfDescription {
   );
 
   final Uint8List _contentType;
+
+  /// Whether the JUMBF requestable bit is set in the toggles byte.
   final bool requestable;
+
+  /// The NUL-terminated JUMBF label, or `null` when absent.
   final String? label;
+
+  /// The unsigned 32-bit JUMBF description id, or `null` when absent.
   final int? id;
   final Uint8List? _hash;
   final Uint8List? _salt;
@@ -157,11 +237,19 @@ final class JumbfDescription {
        _salt = salt == null ? null : Uint8List.fromList(salt),
        _rawBytes = Uint8List.fromList(rawBytes);
 
+  /// A copy of the 16-byte content-type UUID.
   Uint8List get contentType => Uint8List.fromList(_contentType);
+
+  /// The lower-case hexadecimal content-type UUID.
   String get contentTypeHex => JumbfUuid.hex(_contentType);
+
+  /// The 32-byte SHA-256 hash field, or `null` when absent.
   Uint8List? get hash => _hash == null ? null : Uint8List.fromList(_hash);
+
+  /// The C2PA salt bytes, or `null` when absent.
   Uint8List? get salt => _salt == null ? null : Uint8List.fromList(_salt);
 
+  /// Encodes this description as a `jumd` ISO box.
   Uint8List encode() {
     final original = _rawBytes;
     if (original != null) return Uint8List.fromList(original);
@@ -192,6 +280,7 @@ final class JumbfDescription {
     return _encodeBox(JumbfFourcc.description, payload.takeBytes());
   }
 
+  /// Parses a single `jumd` box from [boxBytes].
   static JumbfDescription parse(
     List<int> boxBytes, {
     int offset = 0,
@@ -219,21 +308,25 @@ final class JumbfDescription {
 
 /// Base type for immutable JUMBF tree nodes.
 sealed class JumbfNode {
+  /// Creates a JUMBF node that preserves [rawBytes] when parsed.
   JumbfNode(Uint8List? rawBytes)
     : _rawBytes = rawBytes == null ? null : Uint8List.fromList(rawBytes);
 
   final Uint8List? _rawBytes;
 
+  /// The four-character ISO box type encoded for this node.
   String get boxType;
 
   /// Returns the exact parsed bytes, or the deterministic encoding for a new node.
   Uint8List get rawBytes => encode();
 
+  /// Encodes this node as one complete ISO box.
   Uint8List encode();
 }
 
 /// A JUMBF superbox containing a description and child boxes.
 final class JumbfSuperBoxNode extends JumbfNode {
+  /// Creates a `jumb` superbox from [description] and child boxes.
   JumbfSuperBoxNode({
     required this.description,
     Iterable<JumbfNode> children = const [],
@@ -248,10 +341,16 @@ final class JumbfSuperBoxNode extends JumbfNode {
     required Uint8List rawBytes,
   }) : super(rawBytes);
 
+  /// The first child `jumd` description box for this superbox.
   final JumbfDescription description;
+
+  /// The content boxes or nested superboxes contained after [description].
   final List<JumbfNode> children;
 
+  /// The description label used by C2PA JUMBF URI path segments.
   String? get label => description.label;
+
+  /// Whether [description] marks this superbox as a C2PA `c2cm` box.
   bool get isCompressedManifest =>
       description.contentTypeHex == JumbfUuid.c2paCompressedManifest;
 
@@ -312,6 +411,7 @@ final class JumbfSuperBoxNode extends JumbfNode {
 
 /// Base type for leaf payload boxes.
 sealed class JumbfPayloadNode extends JumbfNode {
+  /// Creates a leaf content box with [boxType] and payload bytes.
   JumbfPayloadNode({
     required this.boxType,
     required Uint8List payload,
@@ -320,9 +420,11 @@ sealed class JumbfPayloadNode extends JumbfNode {
        super(rawBytes);
 
   @override
+  /// The four-character ISO box type encoded for this content box.
   final String boxType;
   final Uint8List _payload;
 
+  /// A copy of this content box payload without its ISO box header.
   Uint8List get payload => Uint8List.fromList(_payload);
 
   @override
@@ -334,24 +436,30 @@ sealed class JumbfPayloadNode extends JumbfNode {
   }
 }
 
+/// A CBOR (`cbor`) content box.
 final class JumbfCborNode extends JumbfPayloadNode {
+  /// Creates a `cbor` content box with [payload].
   JumbfCborNode(Uint8List payload, {Uint8List? rawBytes})
     : super(boxType: JumbfFourcc.cbor, payload: payload, rawBytes: rawBytes);
 }
 
+/// A JSON (`json`) content box.
 final class JumbfJsonNode extends JumbfPayloadNode {
+  /// Creates a `json` content box with [payload].
   JumbfJsonNode(Uint8List payload, {Uint8List? rawBytes})
     : super(boxType: JumbfFourcc.json, payload: payload, rawBytes: rawBytes);
 }
 
 /// A Brotli-compressed (`brob`) content box.
 final class JumbfBrotliNode extends JumbfPayloadNode {
+  /// Creates a `brob` content box with Brotli-compressed [payload].
   JumbfBrotliNode(Uint8List payload, {Uint8List? rawBytes})
     : super(boxType: JumbfFourcc.brotli, payload: payload, rawBytes: rawBytes);
 }
 
 /// An embedded-file media type (`bfdb`) box.
 final class JumbfEmbeddedFileDescriptionNode extends JumbfNode {
+  /// Creates a `bfdb` box with a media type and optional file name.
   JumbfEmbeddedFileDescriptionNode({required this.mediaType, this.fileName})
     : super(null) {
     _validateCString(mediaType, 'media type');
@@ -364,7 +472,10 @@ final class JumbfEmbeddedFileDescriptionNode extends JumbfNode {
     required Uint8List rawBytes,
   }) : super(rawBytes);
 
+  /// The NUL-terminated embedded-file media type.
   final String mediaType;
+
+  /// The optional NUL-terminated embedded-file name.
   final String? fileName;
 
   @override
@@ -390,6 +501,7 @@ final class JumbfEmbeddedFileDescriptionNode extends JumbfNode {
 
 /// An embedded-file data (`bidb`) box.
 final class JumbfEmbeddedFileNode extends JumbfPayloadNode {
+  /// Creates a `bidb` content box with embedded file [payload].
   JumbfEmbeddedFileNode(Uint8List payload, {Uint8List? rawBytes})
     : super(
         boxType: JumbfFourcc.embeddedFileData,
@@ -400,6 +512,7 @@ final class JumbfEmbeddedFileNode extends JumbfPayloadNode {
 
 /// A UUID payload box. [payload] excludes the 16-byte ISO UUID field.
 final class JumbfUuidNode extends JumbfPayloadNode {
+  /// Creates a `uuid` box with a 16-byte [userType] and payload bytes.
   JumbfUuidNode({
     required Uint8List userType,
     required Uint8List payload,
@@ -409,6 +522,7 @@ final class JumbfUuidNode extends JumbfPayloadNode {
 
   final Uint8List _userType;
 
+  /// A copy of the 16-byte ISO UUID user type.
   Uint8List get userType => Uint8List.fromList(_userType);
 
   @override
@@ -421,6 +535,7 @@ final class JumbfUuidNode extends JumbfPayloadNode {
 
 /// A box whose type is not interpreted by this package.
 final class JumbfUnknownNode extends JumbfPayloadNode {
+  /// Creates an uninterpreted content box with [boxType] and [payload].
   JumbfUnknownNode({
     required String boxType,
     required Uint8List payload,
@@ -628,7 +743,10 @@ final class JumbfCompressedManifest {
        _brotliBoxBytes = brotliBox.rawBytes,
        _compressedPayload = brotliBox.payload;
 
+  /// The outer `c2cm` compressed-manifest superbox.
   final JumbfSuperBoxNode outer;
+
+  /// The expanded inner `c2ma` or `c2um` manifest superbox.
   final JumbfSuperBoxNode manifest;
   final Uint8List _originalBytes;
   final Uint8List _outerDescriptionBytes;

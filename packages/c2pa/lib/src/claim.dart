@@ -3,7 +3,9 @@ import 'dart:typed_data';
 import 'intent.dart';
 import 'json_utils.dart';
 
+/// A C2PA hashed URI reference to a claim assertion or resource.
 final class ClaimHashedUri {
+  /// Creates an immutable hashed URI reference and copies [hash].
   ClaimHashedUri({
     required this.url,
     required Uint8List hash,
@@ -12,6 +14,10 @@ final class ClaimHashedUri {
   }) : hash = Uint8List.fromList(hash).asUnmodifiableView(),
        extra = freezeJsonMap(extra);
 
+  /// Decodes a hashed URI reference from a CBOR map.
+  ///
+  /// Throws [FormatException] if the map, `url`, `hash`, or `alg` fields have
+  /// invalid types or required fields are empty.
   factory ClaimHashedUri.fromCbor(Object? value) {
     final map = _stringMap(value, 'hashed URI');
     final url = map['url'];
@@ -34,11 +40,19 @@ final class ClaimHashedUri {
     );
   }
 
+  /// Referenced assertion or resource URI.
   final String url;
+
+  /// Hash algorithm name from `alg`, or `null` when omitted.
   final String? algorithm;
+
+  /// Immutable hash bytes for the referenced [url].
   final Uint8List hash;
+
+  /// Unrecognized CBOR fields preserved from the source map.
   final Map<String, Object?> extra;
 
+  /// Encodes this reference as a CBOR-compatible map.
   Map<String, Object?> toCborMap() => {
     ...extra,
     'url': url,
@@ -59,7 +73,9 @@ final class ClaimHashedUri {
       Object.hash(url, algorithm, deepHash(hash), deepHash(extra));
 }
 
+/// Software identity metadata for the claim generator.
 final class ClaimGeneratorInfo {
+  /// Creates immutable claim-generator metadata.
   ClaimGeneratorInfo({
     required this.name,
     this.version,
@@ -68,6 +84,10 @@ final class ClaimGeneratorInfo {
     Map<String, Object?> extra = const {},
   }) : extra = freezeJsonMap(extra);
 
+  /// Decodes claim-generator metadata from a CBOR map.
+  ///
+  /// Throws [FormatException] if `name` is missing or if optional string fields
+  /// have non-string values.
   factory ClaimGeneratorInfo.fromCbor(Object? value) {
     final map = _stringMap(value, 'claim generator info');
     final name = map['name'];
@@ -105,12 +125,22 @@ final class ClaimGeneratorInfo {
     );
   }
 
+  /// Required claim-generator name.
   final String name;
+
+  /// Optional claim-generator version string.
   final String? version;
+
+  /// Optional icon metadata preserved as JSON-compatible data.
   final Object? icon;
+
+  /// Optional operating system string for the claim generator.
   final String? operatingSystem;
+
+  /// Unrecognized CBOR fields preserved from the source map.
   final Map<String, Object?> extra;
 
+  /// Encodes this generator metadata as a CBOR-compatible map.
   Map<String, Object?> toCborMap() => {
     ...extra,
     'name': name,
@@ -138,7 +168,9 @@ final class ClaimGeneratorInfo {
   );
 }
 
+/// A decoded C2PA claim with common version-independent fields.
 sealed class Claim {
+  /// Creates an immutable claim and copies [rawBytes].
   Claim({
     required this.version,
     required this.label,
@@ -168,23 +200,55 @@ sealed class Claim {
        redactions = List<String>.unmodifiable(redactions),
        unknownFields = freezeJsonMap(unknownFields);
 
+  /// Claim version decoded from the version-specific assertion list.
   final ClaimVersion version;
+
+  /// Manifest label that contained this claim.
   final String label;
+
+  /// Claim `instanceID` value.
   final String instanceId;
+
+  /// URI of the signature box referenced by the claim.
   final String signatureUri;
+
+  /// Legacy v1 `claim_generator` string, or `null` for v2 claims.
   final String? claimGenerator;
+
+  /// Claim-generator metadata entries.
   final List<ClaimGeneratorInfo> claimGeneratorInfo;
+
+  /// Declared asset MIME format for v1 claims, or `null` for v2 claims.
   final String? format;
+
+  /// Optional Dublin Core title from `dc:title`.
   final String? title;
+
+  /// All hashed assertion references in the claim.
   final List<ClaimHashedUri> assertions;
+
+  /// V2 `created_assertions`; empty for v1 claims.
   final List<ClaimHashedUri> createdAssertions;
+
+  /// V2 `gathered_assertions`; empty for v1 claims.
   final List<ClaimHashedUri> gatheredAssertions;
+
+  /// Assertion URIs listed in `redacted_assertions`.
   final List<String> redactions;
+
+  /// Hard-binding hash algorithm from `alg`, or `null` when omitted.
   final String? algorithm;
+
+  /// Soft-binding hash algorithm from `alg_soft`, or `null` when omitted.
   final String? softAlgorithm;
+
+  /// Unrecognized claim fields preserved from the decoded CBOR map.
   final Map<String, Object?> unknownFields;
+
+  /// Immutable original CBOR bytes used to decode the claim.
   final Uint8List rawBytes;
 
+  /// Encodes this claim as a CBOR-compatible map.
   Map<String, Object?> toCborMap();
 
   @override
@@ -230,7 +294,9 @@ sealed class Claim {
   ]);
 }
 
+/// A C2PA claim using the version 1 `assertions` list shape.
 final class ClaimV1 extends Claim {
+  /// Creates an immutable version 1 claim.
   ClaimV1({
     required super.label,
     required super.instanceId,
@@ -271,7 +337,9 @@ final class ClaimV1 extends Claim {
   };
 }
 
+/// A C2PA claim using the version 2 created/gathered assertion shape.
 final class ClaimV2 extends Claim {
+  /// Creates an immutable version 2 claim.
   ClaimV2({
     required super.label,
     required super.instanceId,
@@ -291,6 +359,7 @@ final class ClaimV2 extends Claim {
          assertions: [...createdAssertions, ...gatheredAssertions],
        );
 
+  /// Single generator metadata entry required by version 2 claims.
   ClaimGeneratorInfo get generatorInfo => claimGeneratorInfo.single;
 
   @override
@@ -313,6 +382,11 @@ final class ClaimV2 extends Claim {
   };
 }
 
+/// Decodes a C2PA claim from CBOR [bytes].
+///
+/// The decoded map must contain exactly one version-specific assertion list:
+/// `assertions` for v1 or `created_assertions` for v2. Throws
+/// [FormatException] when required fields are missing or have invalid types.
 Claim decodeClaim({
   required String label,
   required Uint8List bytes,

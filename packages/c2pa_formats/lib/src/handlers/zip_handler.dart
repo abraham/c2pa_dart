@@ -8,8 +8,13 @@ import '../asset_handler.dart';
 import '../errors.dart';
 import '../zip_collection.dart';
 
+/// A ZIP-like archive handler for C2PA manifest entries.
+///
+/// Handles ZIP, EPUB, OOXML, OpenDocument, and OpenXPS containers. The
+/// manifest is stored as the uncompressed entry [manifestPath].
 final class ZipAssetHandler
     implements AssetHandler, ZipCollectionLayoutProvider {
+  /// Creates a ZIP handler for one supported archive [format].
   const ZipAssetHandler({
     required this.format,
     this.maxManifestSize = 64 * 1024 * 1024,
@@ -32,6 +37,7 @@ final class ZipAssetHandler
        assert(maxNameLength > 0),
        assert(copyChunkSize > 0);
 
+  /// Archive path of the embedded C2PA manifest entry.
   static const String manifestPath = 'META-INF/content_credential.c2pa';
 
   static const int _localSignature = 0x04034b50;
@@ -44,12 +50,25 @@ final class ZipAssetHandler
   static const int _uint32Max = 0xffffffff;
 
   @override
+  /// The ZIP-like archive format handled by this instance.
   final AssetFormat format;
+
+  /// Maximum embedded C2PA manifest size in bytes.
   final int maxManifestSize;
+
+  /// Maximum source archive size in bytes.
   final int maxSourceSize;
+
+  /// Maximum rewritten archive size in bytes.
   final int maxOutputSize;
+
+  /// Maximum number of ZIP entries parsed from the central directory.
   final int maxEntryCount;
+
+  /// Maximum entry name length in bytes.
   final int maxNameLength;
+
+  /// Number of bytes copied per streaming write operation.
   final int copyChunkSize;
 
   @override

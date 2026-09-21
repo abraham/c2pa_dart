@@ -4,25 +4,43 @@ import 'dart:io';
 
 import '../performance.dart';
 
+/// Measurements produced by one VM-only benchmark iteration.
 final class BenchmarkIteration {
+  /// Creates iteration measurements in bytes and read counts.
   const BenchmarkIteration({
     required this.bytesProcessed,
     this.readCount = 0,
     this.peakRequestedChunkSize = 0,
   });
 
+  /// Number of input or output bytes processed by the iteration.
   final int bytesProcessed;
+
+  /// Number of random-access reads performed during the iteration.
   final int readCount;
+
+  /// Largest single read request observed during the iteration, in bytes.
   final int peakRequestedChunkSize;
 }
 
+/// VM-only benchmark body invoked for warmups and measured repetitions.
+///
+/// The [BenchmarkCancellationToken] is cooperative; operations should check
+/// it before starting expensive I/O or CPU work.
 typedef VmBenchmarkOperation = FutureOr<BenchmarkIteration> Function(
   int iteration,
   BenchmarkCancellationToken cancellation,
 );
 
 /// Optional wall-clock runner for local benchmarking, not CI assertions.
+///
+/// This runner uses VM timing and file-friendly persistence helpers, so it is
+/// not safe for web tests.
 final class VmBenchmarkRunner {
+  /// Creates a runner with warmups and measured repetitions.
+  ///
+  /// [warmupCount] may be zero; [repetitionCount] must be between 1 and
+  /// 1,000,000.
   VmBenchmarkRunner({this.warmupCount = 1, this.repetitionCount = 10}) {
     RangeError.checkNotNegative(warmupCount, 'warmupCount');
     RangeError.checkValueInInterval(
@@ -33,9 +51,16 @@ final class VmBenchmarkRunner {
     );
   }
 
+  /// Number of unmeasured setup iterations run before sampling.
   final int warmupCount;
+
+  /// Maximum number of measured samples to collect.
   final int repetitionCount;
 
+  /// Runs [operation] and returns timing statistics for completed samples.
+  ///
+  /// Cancellation stops before adding the cancelled sample; [metadata] is
+  /// copied into the resulting report for test diagnostics.
   Future<BenchmarkResult> run({
     required String name,
     required VmBenchmarkOperation operation,
@@ -95,6 +120,10 @@ final class VmBenchmarkRunner {
   }
 }
 
+/// Writes [result] as pretty JSON to an absolute VM file [path].
+///
+/// Creates parent directories as needed and throws [ArgumentError] for
+/// relative paths.
 Future<void> writeBenchmarkResultJson(
   String path,
   BenchmarkResult result,
@@ -107,6 +136,10 @@ Future<void> writeBenchmarkResultJson(
   );
 }
 
+/// Reads a VM benchmark JSON report from an absolute file [path].
+///
+/// Throws [ArgumentError] for relative paths and [FormatException] if the
+/// decoded root is not a JSON object.
 Future<BenchmarkResult> readBenchmarkResultJson(String path) async {
   final decoded = jsonDecode(await _absoluteFile(path).readAsString());
   if (decoded is! Map<String, Object?>) {

@@ -9,11 +9,21 @@ import 'x509_certificate.dart';
 /// Sends an RFC 3161 request and returns the DER response.
 typedef TimestampTransport = Future<List<int>> Function(List<int> requestDer);
 
+/// CMS OIDs used by the RFC 3161 timestamp token subset.
 abstract final class CmsOids {
+  /// The CMS `signedData` content type OID.
   static const signedData = '1.2.840.113549.1.7.2';
+
+  /// The CMS signed-attribute OID for content type.
   static const contentType = '1.2.840.113549.1.9.3';
+
+  /// The CMS signed-attribute OID for message digest.
   static const messageDigest = '1.2.840.113549.1.9.4';
+
+  /// The CMS signed-attribute OID for signing time.
   static const signingTime = '1.2.840.113549.1.9.5';
+
+  /// The RFC 3161 TSTInfo eContentType OID.
   static const tstInfo = '1.2.840.113549.1.9.16.1.4';
 }
 
@@ -22,22 +32,30 @@ sealed class CmsSignerIdentifier {
   const CmsSignerIdentifier();
 }
 
+/// A CMS signer identifier based on issuer name and certificate serial.
 final class CmsIssuerAndSerialNumber extends CmsSignerIdentifier {
+  /// Creates a signer identifier from issuer DER and certificate serial.
   CmsIssuerAndSerialNumber(List<int> issuerDer, this.serialNumber)
     : _issuerDer = Uint8List.fromList(issuerDer);
 
   final Uint8List _issuerDer;
+
+  /// The non-negative X.509 certificate serial number.
   final BigInt serialNumber;
 
+  /// A defensive copy of the DER-encoded issuer name.
   Uint8List get issuerDer => Uint8List.fromList(_issuerDer);
 }
 
+/// A CMS signer identifier based on subject key identifier bytes.
 final class CmsSubjectKeyIdentifier extends CmsSignerIdentifier {
+  /// Creates a signer identifier from a subject key identifier value.
   CmsSubjectKeyIdentifier(List<int> identifier)
     : _identifier = Uint8List.fromList(identifier);
 
   final Uint8List _identifier;
 
+  /// A defensive copy of the subject key identifier bytes.
   Uint8List get identifier => Uint8List.fromList(_identifier);
 }
 
@@ -62,13 +80,22 @@ final class CmsSignerInfo {
            : Uint8List.fromList(messageDigest),
        _signature = Uint8List.fromList(signature);
 
+  /// The CMS SignerIdentifier used to locate the TSA certificate.
   final CmsSignerIdentifier identifier;
+
+  /// The SignerInfo digest algorithm declared for signed attributes.
   final HashAlgorithm digestAlgorithm;
   final Uint8List _signedAttributesDer;
   final Uint8List _signedAttributesSignatureInput;
+
+  /// The signed contentType attribute value, or `null` if absent.
   final String? contentType;
   final Uint8List? _messageDigest;
+
+  /// The signed signingTime attribute, or `null` if absent.
   final DateTime? signingTime;
+
+  /// The SignerInfo signature AlgorithmIdentifier.
   final X509AlgorithmIdentifier signatureAlgorithm;
   final Uint8List _signature;
 
@@ -82,8 +109,11 @@ final class CmsSignerInfo {
   Uint8List get signedAttributesSignatureInput =>
       Uint8List.fromList(_signedAttributesSignatureInput);
 
+  /// A defensive copy of the signed messageDigest attribute, or `null`.
   Uint8List? get messageDigest =>
       _messageDigest == null ? null : Uint8List.fromList(_messageDigest);
+
+  /// A defensive copy of the CMS SignerInfo signature bytes.
   Uint8List get signature => Uint8List.fromList(_signature);
 }
 
@@ -98,13 +128,23 @@ final class TimestampInfo {
     required this.nonce,
   }) : _messageImprint = Uint8List.fromList(messageImprint);
 
+  /// The RFC 3161 policy OID asserted by the timestamp authority.
   final String policyOid;
+
+  /// The hash algorithm used for the RFC 3161 message imprint.
   final HashAlgorithm messageImprintAlgorithm;
   final Uint8List _messageImprint;
+
+  /// The RFC 3161 timestamp token serial number.
   final BigInt serialNumber;
+
+  /// The RFC 3161 `genTime` instant in UTC.
   final DateTime genTime;
+
+  /// The RFC 3161 nonce copied from the request, or `null` if absent.
   final BigInt? nonce;
 
+  /// A defensive copy of the RFC 3161 message imprint digest.
   Uint8List get messageImprint => Uint8List.fromList(_messageImprint);
 }
 
@@ -122,13 +162,26 @@ final class CmsTimestampToken {
 
   final Uint8List _der;
   final Uint8List _encapsulatedContent;
+
+  /// The unauthenticated CMS certificate bag included in the token.
   final List<X509Certificate> certificates;
+
+  /// The single CMS SignerInfo parsed from the timestamp token.
   final CmsSignerInfo signerInfo;
+
+  /// The parsed RFC 3161 TSTInfo encapsulated by the token.
   final TimestampInfo timestampInfo;
 
+  /// A defensive copy of the original DER-encoded CMS token.
   Uint8List get der => Uint8List.fromList(_der);
+
+  /// A defensive copy of the embedded TSTInfo DER bytes.
   Uint8List get encapsulatedContent => Uint8List.fromList(_encapsulatedContent);
 
+  /// Parses a strict DER CMS SignedData timestamp token.
+  ///
+  /// Throws [FormatException] for malformed or unsupported CMS/RFC 3161
+  /// structure and [UnsupportedError] for unsupported hash algorithms.
   factory CmsTimestampToken.parse(List<int> input) {
     _validateBytes(input, 'input');
     final der = Uint8List.fromList(input);
@@ -228,33 +281,81 @@ final class CmsTimestampToken {
   }
 }
 
-enum TimestampStatus { valid, invalid, untrusted, malformed, unsupported }
+/// The high-level result of RFC 3161 timestamp validation.
+enum TimestampStatus {
+  /// All CMS, imprint, nonce, signature, profile, and path checks succeeded.
+  valid,
 
+  /// The token parsed, but one or more cryptographic or profile checks failed.
+  invalid,
+
+  /// The token is structurally valid but no trusted TSA path was found.
+  untrusted,
+
+  /// The input was not supported DER CMS/RFC 3161 syntax.
+  malformed,
+
+  /// The token uses an algorithm outside the supported subset.
+  unsupported,
+}
+
+/// Machine-readable RFC 3161 timestamp validation issue codes.
 enum TimestampIssueCode {
+  /// The token could not be parsed as supported CMS/RFC 3161 DER.
   malformedToken,
+
+  /// SignerInfo lacks the required contentType signed attribute.
   missingContentTypeAttribute,
+
+  /// The contentType signed attribute is not RFC 3161 TSTInfo.
   wrongContentTypeAttribute,
+
+  /// SignerInfo lacks the required messageDigest signed attribute.
   missingMessageDigestAttribute,
+
+  /// The signed messageDigest does not match the embedded TSTInfo.
   messageDigestMismatch,
+
+  /// The TSTInfo message imprint does not match the supplied bytes.
   messageImprintMismatch,
+
+  /// The TSTInfo nonce does not match the expected request nonce.
   nonceMismatch,
+
+  /// No included certificate uniquely matches the SignerInfo identifier.
   signerCertificateNotFound,
+
+  /// SignerInfo digest and signature algorithm parameters disagree.
   signatureAlgorithmMismatch,
+
+  /// The CMS SignerInfo signature is malformed or fails verification.
   invalidCmsSignature,
+
+  /// The TSA certificate fails RFC 3161 profile or validity checks.
   tsaCertificateProfile,
+
+  /// No trusted certificate path reaches a configured TSA trust anchor.
   untrustedCertificatePath,
+
+  /// The token uses a hash or signature algorithm this SDK does not support.
   unsupportedAlgorithm,
 }
 
+/// One issue found while parsing or validating a timestamp token.
 final class TimestampIssue {
+  /// Creates a timestamp validation issue with [code] and [message].
   const TimestampIssue(this.code, this.message);
 
+  /// The machine-readable timestamp validation issue code.
   final TimestampIssueCode code;
+
+  /// The human-readable timestamp validation issue detail.
   final String message;
 }
 
 /// Structured outcome of CMS/RFC 3161 timestamp validation.
 final class TimestampVerificationResult {
+  /// Creates a structured timestamp verification result.
   TimestampVerificationResult({
     required this.status,
     required List<TimestampIssue> issues,
@@ -263,12 +364,22 @@ final class TimestampVerificationResult {
     this.pathResult,
   }) : issues = List.unmodifiable(issues);
 
+  /// The overall timestamp verification status.
   final TimestampStatus status;
+
+  /// The immutable timestamp verification issues collected.
   final List<TimestampIssue> issues;
+
+  /// The parsed token, or `null` when parsing failed.
   final CmsTimestampToken? token;
+
+  /// The included TSA certificate that matched SignerInfo, or `null`.
   final X509Certificate? signerCertificate;
+
+  /// The TSA certificate path result, or `null` before path validation.
   final CertificatePathValidationResult? pathResult;
 
+  /// Whether [status] is [TimestampStatus.valid].
   bool get isValid => status == TimestampStatus.valid;
 }
 

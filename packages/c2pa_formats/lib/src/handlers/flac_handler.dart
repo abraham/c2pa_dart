@@ -8,11 +8,16 @@ import '../errors.dart';
 import '../xmp.dart';
 import 'mp3_handler.dart';
 
+/// A FLAC handler that stores C2PA data in a leading ID3v2 tag.
+///
+/// The manifest is stored in the same ID3 GEOB frame used by [Mp3AssetHandler].
+/// Native FLAC metadata blocks are validated but not used for C2PA storage.
 final class FlacAssetHandler
     implements
         AssetHandler,
         XmpMetadataProvider,
         RemoteManifestReferenceProvider {
+  /// Creates a FLAC handler with source, manifest, and ID3 limits.
   const FlacAssetHandler({
     this.maxManifestSize = 64 * 1024 * 1024,
     this.maxSourceSize = 256 * 1024 * 1024,
@@ -26,13 +31,28 @@ final class FlacAssetHandler
 
   static const List<int> _signature = <int>[0x66, 0x4c, 0x61, 0x43];
 
+  /// Maximum embedded C2PA manifest size in bytes.
   final int maxManifestSize;
+
+  /// Maximum source asset size in bytes.
   final int maxSourceSize;
+
+  /// Maximum rewritten asset size in bytes.
   final int maxOutputSize;
+
+  /// Maximum number of native FLAC metadata blocks inspected.
   final int maxMetadataBlocks;
+
+  /// Maximum size in bytes for one native FLAC metadata block.
   final int maxMetadataBlockSize;
+
+  /// Maximum number of ID3 frames inspected before the FLAC stream.
   final int maxId3Frames;
+
+  /// Maximum XMP packet size in bytes.
   final int maxXmpSize;
+
+  /// Maximum UTF-8 length of a remote reference in bytes.
   final int maxRemoteReferenceLength;
 
   Mp3AssetHandler get _id3 => Mp3AssetHandler(

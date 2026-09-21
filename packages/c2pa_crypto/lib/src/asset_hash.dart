@@ -6,11 +6,15 @@ import 'package:cryptography/cryptography.dart' as cryptography;
 
 import 'hash_algorithm.dart';
 
+/// Reports whether streaming asset hashing should stop before more I/O.
 typedef AssetHashCancellationCallback = FutureOr<bool> Function();
+
+/// Receives monotonic progress after each hashed source or injected chunk.
 typedef AssetHashProgressCallback = void Function(AssetHashProgress progress);
 
 /// Progress reported after each source chunk or injected-byte event.
 final class AssetHashProgress {
+  /// Creates an immutable asset-hashing progress sample.
   const AssetHashProgress({
     required this.bytesProcessed,
     required this.totalBytes,
@@ -18,24 +22,36 @@ final class AssetHashProgress {
     this.sourceRange,
   });
 
+  /// The number of bytes hashed so far across all events.
   final int bytesProcessed;
+
+  /// The total number of bytes scheduled for hashing.
   final int totalBytes;
+
+  /// The zero-based input event index currently being reported.
   final int eventIndex;
+
+  /// The source byte range just read, or `null` for injected bytes.
   final ByteRange? sourceRange;
 
+  /// The completed fraction in the inclusive range from `0` to `1`.
   double get fraction => totalBytes == 0 ? 1 : bytesProcessed / totalBytes;
 }
 
 /// One ordered input event in an asset hash stream.
 sealed class AssetHashEvent {
   const AssetHashEvent();
+
+  /// The number of bytes this event contributes to the hash stream.
   int get length;
 }
 
 /// Hashes bytes read from [range].
 final class AssetHashRangeEvent extends AssetHashEvent {
+  /// Creates an event that streams bytes from [range].
   const AssetHashRangeEvent(this.range);
 
+  /// The source range to hash.
   final ByteRange range;
 
   @override
@@ -47,11 +63,15 @@ final class AssetHashRangeEvent extends AssetHashEvent {
 /// This is suitable for future BMFF hard-binding fields such as encoded
 /// 64-bit offsets without changing the source-range streaming machinery.
 final class AssetHashInjectedBytesEvent extends AssetHashEvent {
+  /// Creates an event that injects caller-provided [bytes] into the stream.
+  ///
+  /// Throws [ArgumentError] if [bytes] contains values outside `0..255`.
   AssetHashInjectedBytesEvent(List<int> bytes)
     : _bytes = Uint8List.fromList(_checkedBytes(bytes, 'bytes'));
 
   final Uint8List _bytes;
 
+  /// A defensive copy of the injected bytes.
   Uint8List get bytes => Uint8List.fromList(_bytes);
 
   @override
@@ -60,50 +80,71 @@ final class AssetHashInjectedBytesEvent extends AssetHashEvent {
 
 /// Digest associated with one independent source range.
 final class AssetRangeDigest {
+  /// Creates a digest result for an independent source [range].
   AssetRangeDigest(this.range, List<int> digest)
     : _digest = Uint8List.fromList(digest);
 
+  /// The source range this digest covers.
   final ByteRange range;
   final Uint8List _digest;
 
+  /// A defensive copy of the digest bytes.
   Uint8List get digest => Uint8List.fromList(_digest);
 }
 
+/// Base class for streaming asset-hash failures.
 sealed class AssetHashException implements Exception {
+  /// Creates an asset-hash exception with a human-readable [message].
   const AssetHashException(this.message);
 
+  /// The human-readable failure detail.
   final String message;
 
   @override
   String toString() => '$runtimeType: $message';
 }
 
+/// An exception raised when asset hashing is cancelled by the callback.
 final class AssetHashCancelledException extends AssetHashException {
+  /// Creates an exception raised when cancellation is requested.
   const AssetHashCancelledException() : super('Asset hashing was cancelled');
 }
 
+/// An exception raised when the source length changes during hashing.
 final class AssetHashSourceLengthChangedException extends AssetHashException {
+  /// Creates an exception for a source length mutation during hashing.
   const AssetHashSourceLengthChangedException(this.before, this.after)
     : super('Source length changed from $before to $after while hashing');
 
+  /// The source length in bytes observed before hashing began.
   final int before;
+
+  /// The source length in bytes observed after a read.
   final int after;
 }
 
+/// An exception raised when a source returns fewer bytes than requested.
 final class AssetHashShortReadException extends AssetHashException {
+  /// Creates an exception for a read shorter than the requested range.
   const AssetHashShortReadException({
     required this.range,
     required this.expectedLength,
     required this.actualLength,
   }) : super('Read $actualLength bytes for $range; expected $expectedLength');
 
+  /// The source range requested from the byte source.
   final ByteRange range;
+
+  /// The exact number of bytes expected for [range].
   final int expectedLength;
+
+  /// The number of bytes actually returned by the source.
   final int actualLength;
 }
 
 /// Streaming asset hashing over random-access sources.
 final class AssetHashEngine {
+  /// Creates a streaming asset-hash engine.
   AssetHashEngine({
     this.chunkSize = 64 * 1024,
     this.isCancelled,
@@ -118,8 +159,13 @@ final class AssetHashEngine {
     }
   }
 
+  /// The maximum source bytes read per chunk.
   final int chunkSize;
+
+  /// The optional cancellation hook checked before reads and finalization.
   final AssetHashCancellationCallback? isCancelled;
+
+  /// The optional progress callback invoked after each hashed event chunk.
   final AssetHashProgressCallback? onProgress;
 
   /// Hashes the entire source without whole-file buffering.
@@ -359,6 +405,10 @@ final class AssetHashEngine {
 }
 
 /// Compares digests without data-dependent early exit.
+/// Compares [left] and [right] without data-dependent early exit.
+///
+/// The loop runs for the longer input length; unlike internal range
+/// ordering helpers, it does not stop at the first differing byte.
 bool constantTimeDigestEquals(List<int> left, List<int> right) {
   var difference = left.length ^ right.length;
   final length = left.length > right.length ? left.length : right.length;

@@ -13,7 +13,9 @@ class BrotliException implements Exception {
   }
 }
 
+/// Error raised when decoded Brotli output exceeds the configured limit.
 class BrotliOutputLimitException extends BrotliException {
+  /// Creates an output-limit exception.
   const BrotliOutputLimitException()
     : super('Decoded Brotli output exceeds the configured limit');
 }

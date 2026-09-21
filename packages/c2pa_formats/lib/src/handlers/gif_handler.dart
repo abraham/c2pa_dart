@@ -10,6 +10,10 @@ import '../hash_layout.dart';
 import '../xmp.dart';
 import '../xmp_remote_reference.dart';
 
+/// A GIF handler for C2PA application extension blocks.
+///
+/// The manifest is stored in an application extension whose identifier is
+/// `C2PA_GIF` and whose authentication code is `01 00 00`.
 final class GifAssetHandler
     implements
         AssetHandler,
@@ -17,6 +21,7 @@ final class GifAssetHandler
         BoxHashLayoutProvider,
         XmpMetadataProvider,
         RemoteManifestReferenceProvider {
+  /// Creates a GIF handler with sub-block and byte limits.
   const GifAssetHandler({
     this.maxManifestSize = 64 * 1024 * 1024,
     this.maxSourceSize = 256 * 1024 * 1024,
@@ -58,11 +63,22 @@ final class GifAssetHandler
   static const List<int> _xmpAuthenticationCode = <int>[0x58, 0x4d, 0x50];
   static const int _xmpTrailerLength = 257;
 
+  /// Maximum embedded C2PA manifest size in bytes.
   final int maxManifestSize;
+
+  /// Maximum source GIF size in bytes.
   final int maxSourceSize;
+
+  /// Maximum rewritten GIF size in bytes.
   final int maxOutputSize;
+
+  /// Maximum number of data sub-blocks parsed from the GIF.
   final int maxSubBlockCount;
+
+  /// Maximum XMP packet size in bytes.
   final int maxXmpSize;
+
+  /// Maximum UTF-8 length of a remote reference in bytes.
   final int maxRemoteReferenceLength;
 
   @override
@@ -687,6 +703,7 @@ final class GifAssetHandler
   }
 }
 
+/// Backward-compatible alias for [GifAssetHandler].
 typedef GifHandler = GifAssetHandler;
 
 enum _GifMutation { embed, replace, remove }

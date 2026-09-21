@@ -58,9 +58,16 @@ final class IsoBoxHeader {
     return value == null ? null : Uint8List.fromList(value);
   }
 
+  /// Payload size in bytes, excluding the encoded box header.
   int get payloadSize => size - headerSize;
+
+  /// Byte offset immediately after this box within the parsed source.
   int get endOffset => offset + size;
+
+  /// Whether this header uses the 64-bit `largesize` field.
   bool get isLargeSize => headerSize == 16 || headerSize == 32;
+
+  /// Whether [type] is the ISO `uuid` extension box type.
   bool get isUuid => type == 'uuid';
 
   /// Parses one box header at [offset], bounded by [end].

@@ -6,6 +6,9 @@ import 'exceptions.dart';
 import 'http_remote_types.dart';
 import 'remote_manifest.dart';
 
+/// Creates the VM and Flutter IO HTTP remote manifest resolver.
+///
+/// The resolver performs network I/O and enforces [policy] and [timeouts].
 C2paHttpRemoteResolver createC2paHttpRemoteResolver({
   required RemoteManifestPolicy policy,
   required C2paHttpTimeouts timeouts,

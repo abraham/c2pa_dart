@@ -3,6 +3,10 @@ import 'dart:io';
 
 import '../campaign.dart';
 
+/// Writes a mutation campaign report as VM-only JSON to absolute [path].
+///
+/// Creates parent directories as needed and throws [ArgumentError] for
+/// relative paths; this uses `dart:io` and is not web-safe.
 Future<void> writeMutationCampaignReport(
   String path,
   MutationCampaignReport report,
@@ -19,6 +23,10 @@ Future<void> writeMutationCampaignReport(
   );
 }
 
+/// Reads a VM-only mutation campaign report JSON file from absolute [path].
+///
+/// Throws [ArgumentError] for relative paths and [FormatException] when the
+/// decoded root is not a JSON object.
 Future<MutationCampaignReport> readMutationCampaignReport(String path) async {
   final uri = Uri.file(path);
   if (!uri.isAbsolute) {

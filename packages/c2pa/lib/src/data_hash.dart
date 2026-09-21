@@ -4,10 +4,12 @@ import 'json_utils.dart';
 
 /// One excluded byte range in a DataHash v1 assertion.
 final class DataHashExclusionRange {
+  /// Creates a non-negative excluded byte range.
   const DataHashExclusionRange({required this.start, required this.length})
     : assert(start >= 0),
       assert(length >= 0);
 
+  /// Decodes an excluded byte range from a CBOR map.
   factory DataHashExclusionRange.fromCbor(Object? value) {
     if (value is! Map ||
         value['start'] is! int ||
@@ -22,11 +24,17 @@ final class DataHashExclusionRange {
     );
   }
 
+  /// Zero-based starting byte offset of the excluded range.
   final int start;
+
+  /// Excluded range length in bytes.
   final int length;
 
+  /// Exclusive ending byte offset of the excluded range.
   int get end => start + length;
 
+  /// Encodes this range as a CBOR-compatible map.
+  /// Encodes this assertion as a CBOR-compatible map.
   Map<String, Object?> toCborMap() => {'start': start, 'length': length};
 
   @override
@@ -41,6 +49,7 @@ final class DataHashExclusionRange {
 
 /// Typed representation of the v1 `c2pa.hash.data` assertion.
 final class DataHashAssertion {
+  /// Creates a v1 `c2pa.hash.data` hard-binding assertion.
   DataHashAssertion({
     Iterable<DataHashExclusionRange>? exclusions,
     this.name,
@@ -57,6 +66,7 @@ final class DataHashAssertion {
            ? null
            : Uint8List.fromList(pad2).asUnmodifiableView();
 
+  /// Decodes a `c2pa.hash.data` assertion from a CBOR map.
   factory DataHashAssertion.fromCbor(Object? value) {
     if (value is! Map) {
       throw const FormatException('A DataHash assertion must be a map');
@@ -87,16 +97,31 @@ final class DataHashAssertion {
     );
   }
 
+  /// Assertion label for DataHash hard bindings.
   static const label = 'c2pa.hash.data';
+
+  /// C2PA DataHash assertion version supported by this type.
   static const version = 1;
 
+  /// Excluded byte ranges, or `null` when the whole asset is hashed.
   final List<DataHashExclusionRange>? exclusions;
+
+  /// Optional DataHash name from the assertion.
   final String? name;
+
+  /// Optional digest algorithm name stored in `alg`.
   final String? algorithm;
+
+  /// Digest bytes for the non-excluded asset data.
   final Uint8List hash;
+
+  /// Padding bytes stored with the DataHash assertion.
   final Uint8List pad;
+
+  /// Optional second padding byte string for placeholder workflows.
   final Uint8List? pad2;
 
+  /// Encodes this assertion as a CBOR-compatible map.
   Map<String, Object?> toCborMap() => {
     if (exclusions != null)
       'exclusions': exclusions!

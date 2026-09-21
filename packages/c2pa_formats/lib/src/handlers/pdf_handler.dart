@@ -10,6 +10,7 @@ import '../xmp.dart';
 
 /// PDF handler using append-only incremental updates for C2PA associated files.
 final class PdfAssetHandler implements AssetHandler, XmpMetadataProvider {
+  /// Creates a PDF handler with object graph and byte limits.
   const PdfAssetHandler({
     this.maxSourceSize = 256 * 1024 * 1024,
     this.maxOutputSize = 320 * 1024 * 1024,
@@ -26,12 +27,25 @@ final class PdfAssetHandler implements AssetHandler, XmpMetadataProvider {
        assert(maxXrefSections > 0),
        assert(maxObjectDepth > 0);
 
+  /// Maximum source PDF size in bytes.
   final int maxSourceSize;
+
+  /// Maximum rewritten PDF size in bytes.
   final int maxOutputSize;
+
+  /// Maximum embedded C2PA manifest size in bytes.
   final int maxManifestSize;
+
+  /// Maximum decoded XMP metadata stream size in bytes.
   final int maxXmpSize;
+
+  /// Maximum number of indirect objects parsed from the PDF.
   final int maxObjectCount;
+
+  /// Maximum number of cross-reference sections followed.
   final int maxXrefSections;
+
+  /// Maximum nested object depth while resolving PDF objects.
   final int maxObjectDepth;
 
   @override

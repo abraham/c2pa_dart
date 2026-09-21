@@ -3,7 +3,12 @@ import 'dart:typed_data';
 
 import 'package:c2pa_io/c2pa_io.dart' as io;
 
+/// A concrete byte override inside a synthetic sparse asset.
 final class SparseByteSegment {
+  /// Creates a segment beginning at [offset] with copied [bytes].
+  ///
+  /// [offset] is a byte coordinate from zero through the C2PA I/O coordinate
+  /// limit, and the segment must not extend past that limit.
   SparseByteSegment({required this.offset, required List<int> bytes})
     : _bytes = Uint8List.fromList(bytes) {
     RangeError.checkValueInInterval(
@@ -17,16 +22,26 @@ final class SparseByteSegment {
     }
   }
 
+  /// Zero-based byte coordinate where this segment starts.
   final int offset;
   final Uint8List _bytes;
 
+  /// The number of bytes in this segment.
   int get length => _bytes.length;
+
+  /// The exclusive byte coordinate immediately after this segment.
   int get end => io.ByteRange.checkedAdd(offset, length);
+
+  /// A defensive copy of this segment's concrete bytes.
   Uint8List get bytes => Uint8List.fromList(_bytes);
 }
 
 /// A deterministic logical asset that allocates only requested ranges.
 final class SparseRandomAccessAsset implements io.RandomAccessByteSource {
+  /// Creates an in-memory asset with deterministic bytes and sparse patches.
+  ///
+  /// [logicalLength] is the exposed byte length. Reads synthesize bytes from
+  /// [seed] except where non-overlapping [segments] provide concrete data.
   SparseRandomAccessAsset({
     required this.logicalLength,
     this.name = 'sparse',
@@ -66,17 +81,35 @@ final class SparseRandomAccessAsset implements io.RandomAccessByteSource {
     }
   }
 
+  /// The byte length reported by [length], without allocating that many bytes.
   final int logicalLength;
+
+  /// Test-facing asset name, which must not be blank.
   final String name;
+
+  /// Optional MIME type associated with the synthetic asset.
   final String? mediaType;
+
+  /// Deterministic pseudo-random seed in the unsigned 32-bit range.
   final int seed;
+
+  /// Maximum bytes allowed in a single [read] call.
   final int maxReadBytes;
+
+  /// Sorted immutable concrete byte segments overlaid on generated data.
   final List<SparseByteSegment> segments;
+
+  /// Immutable test metadata carried alongside the synthetic source.
   final Map<String, Object?> metadata;
 
+  /// The logical asset length in bytes.
   @override
   Future<int> get length async => logicalLength;
 
+  /// Reads [range] by synthesizing bytes and applying overlapping segments.
+  ///
+  /// Throws `ByteRangeOutOfBoundsException` when [range] is outside the
+  /// logical asset and [RangeError] when it exceeds [maxReadBytes].
   @override
   Future<Uint8List> read(io.ByteRange range) async {
     _validateRead(range, logicalLength, maxReadBytes);
@@ -101,6 +134,10 @@ final class SparseRandomAccessAsset implements io.RandomAccessByteSource {
 
 /// A logical source composed of fixed-size chunks with a repeating pattern.
 final class PatternedChunkSource implements io.RandomAccessByteSource {
+  /// Creates a source whose pattern restarts at every [chunkSize] boundary.
+  ///
+  /// [pattern] must contain byte values and at least one value; [chunkSize]
+  /// and [maxReadBytes] are measured in bytes.
   PatternedChunkSource({
     required this.logicalLength,
     required List<int> pattern,
@@ -133,19 +170,36 @@ final class PatternedChunkSource implements io.RandomAccessByteSource {
     );
   }
 
+  /// The byte length reported by [length].
   final int logicalLength;
+
+  /// Test-facing asset name, which must not be blank.
   final String name;
+
+  /// Optional MIME type associated with the patterned source.
   final String? mediaType;
   final Uint8List _pattern;
+
+  /// The byte interval at which [pattern] restarts.
   final int chunkSize;
+
+  /// Maximum bytes allowed in a single [read] call.
   final int maxReadBytes;
+
+  /// Immutable test metadata carried alongside the patterned source.
   final Map<String, Object?> metadata;
 
+  /// A defensive copy of the repeating byte pattern.
   Uint8List get pattern => Uint8List.fromList(_pattern);
 
+  /// The logical source length in bytes.
   @override
   Future<int> get length async => logicalLength;
 
+  /// Reads [range] from the chunk-restarted pattern.
+  ///
+  /// Throws `ByteRangeOutOfBoundsException` when [range] is outside the
+  /// logical source and [RangeError] when it exceeds [maxReadBytes].
   @override
   Future<Uint8List> read(io.ByteRange range) async {
     _validateRead(range, logicalLength, maxReadBytes);
@@ -158,9 +212,15 @@ final class PatternedChunkSource implements io.RandomAccessByteSource {
   }
 }
 
+/// Hook invoked after a read is recorded and before it reaches the source.
+///
+/// Tests can return a [Future] to deliberately hold [range] reads open and
+/// assert concurrent access behavior.
 typedef BeforeInstrumentedRead = FutureOr<void> Function(io.ByteRange range);
 
+/// A single recorded read attempt against an instrumented source.
 final class InstrumentedReadRecord {
+  /// Creates an immutable record for one read sequence number.
   const InstrumentedReadRecord({
     required this.sequence,
     required this.range,
@@ -168,17 +228,30 @@ final class InstrumentedReadRecord {
     required this.succeeded,
   });
 
+  /// Zero-based order in which the read was requested.
   final int sequence;
+
+  /// The requested byte range.
   final io.ByteRange range;
+
+  /// Number of active reads observed when this read started.
   final int concurrency;
+
+  /// Whether the read completed successfully, failed, or is still pending.
+  ///
+  /// A `null` value means the wrapped [Future] has not completed yet.
   final bool? succeeded;
 }
 
 /// Records read shape without changing the wrapped source's byte semantics.
 final class InstrumentedByteSource implements io.RandomAccessByteSource {
+  /// Wraps [source] and optionally pauses each read with [beforeRead].
   InstrumentedByteSource(this.source, {this.beforeRead});
 
+  /// The byte source whose data and errors are preserved.
   final io.RandomAccessByteSource source;
+
+  /// Optional hook used by tests to coordinate read timing.
   final BeforeInstrumentedRead? beforeRead;
   final List<InstrumentedReadRecord> _reads = [];
   int _activeReads = 0;
@@ -186,13 +259,27 @@ final class InstrumentedByteSource implements io.RandomAccessByteSource {
   int _totalRequestedBytes = 0;
   int _peakRequestedChunkSize = 0;
 
+  /// Immutable snapshot of recorded reads in request order.
   List<InstrumentedReadRecord> get reads => List.unmodifiable(_reads);
+
+  /// Number of reads requested since construction or the last [reset].
   int get readCount => _reads.length;
+
+  /// Number of wrapped reads currently in flight.
   int get activeReads => _activeReads;
+
+  /// Maximum simultaneous reads observed since the last [reset].
   int get peakConcurrency => _peakConcurrency;
+
+  /// Sum of requested byte lengths since the last [reset].
   int get totalRequestedBytes => _totalRequestedBytes;
+
+  /// Largest single requested byte length since the last [reset].
   int get peakRequestedChunkSize => _peakRequestedChunkSize;
 
+  /// Clears accumulated read records and counters.
+  ///
+  /// Throws [StateError] if any wrapped read is still active.
   void reset() {
     if (_activeReads != 0) {
       throw StateError('Cannot reset while reads are active.');
@@ -203,9 +290,11 @@ final class InstrumentedByteSource implements io.RandomAccessByteSource {
     _peakRequestedChunkSize = 0;
   }
 
+  /// The wrapped source length, forwarded without recording a read.
   @override
   Future<int> get length => source.length;
 
+  /// Records [range], forwards the read, and preserves bytes or errors.
   @override
   Future<Uint8List> read(io.ByteRange range) async {
     final sequence = _reads.length;

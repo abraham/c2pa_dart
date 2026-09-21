@@ -11,6 +11,10 @@ import '../isobmff.dart';
 import '../xmp.dart';
 import '../xmp_remote_reference.dart';
 
+/// A JPEG XL container handler for C2PA JUMBF boxes.
+///
+/// The manifest is a top-level `jumb` box in the JPEG XL container. Raw JPEG
+/// XL codestreams are detected as unsupported because they cannot carry boxes.
 final class JpegXlAssetHandler
     implements
         AssetHandler,
@@ -18,6 +22,7 @@ final class JpegXlAssetHandler
         IsoBmffBoxProvider,
         XmpMetadataProvider,
         RemoteManifestReferenceProvider {
+  /// Creates a JPEG XL handler with byte and box-count limits.
   const JpegXlAssetHandler({
     this.maxManifestSize = 64 * 1024 * 1024,
     this.maxSourceSize = 512 * 1024 * 1024,
@@ -34,6 +39,7 @@ final class JpegXlAssetHandler
        assert(maxXmpSize > 0),
        assert(maxRemoteReferenceLength > 0);
 
+  /// JPEG XL container signature bytes required before any boxes.
   static const List<int> containerSignature = <int>[
     0x00,
     0x00,
@@ -48,14 +54,29 @@ final class JpegXlAssetHandler
     0x87,
     0x0a,
   ];
+
+  /// Signature bytes for unsupported raw JPEG XL codestreams.
   static const List<int> rawCodestreamSignature = <int>[0xff, 0x0a];
 
+  /// Maximum embedded C2PA manifest size in bytes.
   final int maxManifestSize;
+
+  /// Maximum source asset size in bytes.
   final int maxSourceSize;
+
+  /// Maximum rewritten asset size in bytes.
   final int maxOutputSize;
+
+  /// Maximum number of top-level JPEG XL boxes parsed from the asset.
   final int maxBoxCount;
+
+  /// Number of bytes copied per streaming write operation.
   final int copyChunkSize;
+
+  /// Maximum XMP packet size in bytes.
   final int maxXmpSize;
+
+  /// Maximum UTF-8 length of a remote reference in bytes.
   final int maxRemoteReferenceLength;
 
   @override

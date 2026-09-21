@@ -5,19 +5,34 @@ import 'certificate_profile.dart';
 import 'path_validation.dart';
 import 'x509_certificate.dart';
 
-enum PemDuplicateCertificateHandling { reject, ignore }
+/// Duplicate-certificate behavior while parsing or encoding PEM bundles.
+enum PemDuplicateCertificateHandling {
+  /// Reject repeated DER certificates with [FormatException].
+  reject,
 
+  /// Keep only the first instance of repeated DER certificates.
+  ignore,
+}
+
+/// Limits enforced while parsing or encoding PEM certificate bundles.
 final class PemCertificateLimits {
+  /// Creates PEM parsing and encoding byte-count limits.
   const PemCertificateLimits({
     this.maxCertificateBytes = 1024 * 1024,
     this.maxCertificates = 1024,
     this.maxBundleBytes = 16 * 1024 * 1024,
   });
 
+  /// The maximum DER byte length accepted for one certificate.
   final int maxCertificateBytes;
+
+  /// The maximum number of certificates accepted in one bundle.
   final int maxCertificates;
+
+  /// The maximum UTF-8 byte length accepted for the whole bundle.
   final int maxBundleBytes;
 
+  /// Validates that all PEM limits are positive.
   void validate() {
     if (maxCertificateBytes < 1 || maxCertificates < 1 || maxBundleBytes < 1) {
       throw const FormatException('PEM limits must be positive');
@@ -157,26 +172,48 @@ String encodePemCertificateBundle(
   return pem;
 }
 
+/// A source of platform trust anchors for trust-list construction.
 abstract interface class PlatformTrustAnchorProvider {
+  /// Loads DER-encoded trust anchors from the platform.
+  ///
+  /// Implementations may perform platform I/O; callers wrap failures in
+  /// [TrustAnchorProviderException].
   Future<Iterable<List<int>>> loadTrustAnchors();
 }
 
-enum TrustAnchorMergePrecedence { pemThenPlatform, platformThenPem }
+/// Ordering rule used when merging explicit PEM and platform anchors.
+enum TrustAnchorMergePrecedence {
+  /// Explicit PEM anchors are ordered before platform anchors.
+  pemThenPlatform,
 
+  /// Platform anchors are ordered before explicit PEM anchors.
+  platformThenPem,
+}
+
+/// A failure raised while loading platform trust anchors.
 final class TrustAnchorProviderException implements Exception {
+  /// Creates an exception for a platform trust-anchor provider failure.
   const TrustAnchorProviderException(this.message, {this.cause});
 
+  /// The human-readable trust-anchor provider failure detail.
   final String message;
+
+  /// The underlying provider error, if one was available.
   final Object? cause;
 
   @override
   String toString() => 'TrustAnchorProviderException: $message';
 }
 
+/// Paired trust policies for claim signers and timestamp authorities.
 final class C2paTrustPolicies {
+  /// Creates paired signer and TSA trust policies.
   const C2paTrustPolicies({required this.signer, required this.tsa});
 
+  /// The trust policy for C2PA claim-signing certificates.
   final TrustPolicy signer;
+
+  /// The trust policy for RFC 3161 timestamping certificates.
   final TrustPolicy tsa;
 }
 

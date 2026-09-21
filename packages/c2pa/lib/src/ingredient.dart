@@ -3,23 +3,34 @@ import 'intent.dart';
 import 'json_utils.dart';
 import 'validation.dart';
 
+/// C2PA ingredient assertion version.
 enum IngredientAssertionVersion {
+  /// Original `c2pa.ingredient` assertion without a version suffix.
   v1(1),
+
+  /// Version 2 `c2pa.ingredient.v2` assertion.
   v2(2),
+
+  /// Version 3 `c2pa.ingredient.v3` assertion.
   v3(3);
 
+  /// Creates a version backed by its numeric label suffix.
   const IngredientAssertionVersion(this.number);
+
+  /// Numeric version written in versioned assertion labels.
   final int number;
 }
 
 /// An asset type attached to an ingredient.
 final class IngredientAssetType {
+  /// Creates an ingredient asset type with preserved extension fields.
   IngredientAssetType({
     required this.type,
     this.version,
     Map<String, Object?> extra = const {},
   }) : extra = freezeJsonMap(extra);
 
+  /// Decodes an ingredient asset type from a CBOR map.
   factory IngredientAssetType.fromCbor(Object? value) {
     final map = _stringMap(value, 'asset type');
     final type = map['type'];
@@ -34,10 +45,16 @@ final class IngredientAssetType {
     );
   }
 
+  /// Media or semantic asset type identifier.
   final String type;
+
+  /// Optional version string for [type], or `null` when unspecified.
   final String? version;
+
+  /// Unrecognized CBOR fields preserved for round-tripping.
   final Map<String, Object?> extra;
 
+  /// Encodes this asset type as a CBOR-compatible map.
   Map<String, Object?> toCborMap() => {
     ...extra,
     'type': type,
@@ -57,6 +74,7 @@ final class IngredientAssetType {
 
 /// Typed ingredient assertion supporting specification versions 1, 2, and 3.
 final class IngredientAssertion {
+  /// Creates a typed ingredient assertion for [version].
   IngredientAssertion({
     required this.version,
     required this.relationship,
@@ -108,6 +126,7 @@ final class IngredientAssertion {
     }
   }
 
+  /// Decodes an ingredient assertion from a CBOR map for [version].
   factory IngredientAssertion.fromCbor(
     Object? value, {
     required IngredientAssertionVersion version,
@@ -153,34 +172,78 @@ final class IngredientAssertion {
     );
   }
 
+  /// Base assertion label for C2PA ingredient assertions.
   static const label = 'c2pa.ingredient';
+
+  /// Default ingredient assertion version emitted by new manifests.
   static const defaultVersion = IngredientAssertionVersion.v3;
 
+  /// C2PA ingredient assertion version used for encoding.
   final IngredientAssertionVersion version;
+
+  /// Relationship between this ingredient and the active manifest.
   final Relationship relationship;
+
+  /// Optional ingredient title from `dc:title`.
   final String? title;
+
+  /// Optional media type from `dc:format`.
   final String? format;
+
+  /// Optional C2PA `documentID` value for v1 and v2 assertions.
   final String? documentId;
+
+  /// Optional C2PA `instanceID` value for this ingredient.
   final String? instanceId;
+
+  /// Optional hashed URI for the ingredient thumbnail assertion.
   final ClaimHashedUri? thumbnail;
+
+  /// Optional hashed URI for ingredient data.
   final ClaimHashedUri? data;
+
+  /// Optional hashed URI for the ingredient manifest in v1 and v2.
   final ClaimHashedUri? c2paManifest;
+
+  /// Optional hashed URI for the ingredient active manifest in v3.
   final ClaimHashedUri? activeManifest;
+
+  /// Optional hashed URI for the ingredient claim signature in v3.
   final ClaimHashedUri? claimSignature;
+
+  /// Deprecated v1/v2 validation status list, or `null` when absent.
   final List<ValidationIssue>? validationStatus;
+
+  /// Nested validation results for v3 ingredients, or `null` when absent.
   final ValidationResults? validationResults;
+
+  /// Optional free-form ingredient description.
   final String? description;
+
+  /// Optional informational URI for the ingredient.
   final String? informationalUri;
+
+  /// Optional asset data-type descriptors, or `null` when absent.
   final List<IngredientAssetType>? assetTypes;
+
+  /// Soft-binding match result, or `null` when not evaluated.
   final bool? softBindingsMatched;
+
+  /// Soft-binding algorithms that matched, or `null` when not reported.
   final List<String>? softBindingAlgorithmsMatched;
+
+  /// Ingredient metadata map preserved as immutable JSON-like data.
   final Map<String, Object?> metadata;
+
+  /// Unrecognized CBOR fields preserved for round-tripping.
   final Map<String, Object?> unknownFields;
 
+  /// Assertion label for [version].
   String get assertionLabel => version == IngredientAssertionVersion.v1
       ? label
       : '$label.v${version.number}';
 
+  /// Encodes this ingredient as a CBOR-compatible map.
   Map<String, Object?> toCborMap() {
     final map = <String, Object?>{
       ...unknownFields,

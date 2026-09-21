@@ -10,6 +10,10 @@ import '../hash_layout.dart';
 import '../xmp.dart';
 import '../xmp_remote_reference.dart';
 
+/// An SVG handler for C2PA manifest elements.
+///
+/// The manifest is base64 text in a `c2pa:manifest` element that must be a
+/// direct child of SVG `metadata`.
 final class SvgAssetHandler
     implements
         AssetHandler,
@@ -17,6 +21,7 @@ final class SvgAssetHandler
         BoxHashLayoutProvider,
         XmpMetadataProvider,
         RemoteManifestReferenceProvider {
+  /// Creates an SVG handler with XML element and byte limits.
   const SvgAssetHandler({
     this.maxManifestSize = 64 * 1024 * 1024,
     this.maxSourceSize = 64 * 1024 * 1024,
@@ -34,12 +39,25 @@ final class SvgAssetHandler
   static const String _dctermsNamespace = 'http://purl.org/dc/terms/';
   static const String _xpacketId = 'W5M0MpCehiHzreSzNTczkc9d';
 
+  /// Maximum decoded C2PA manifest size in bytes.
   final int maxManifestSize;
+
+  /// Maximum source SVG size in bytes.
   final int maxSourceSize;
+
+  /// Maximum rewritten SVG size in bytes.
   final int maxOutputSize;
+
+  /// Maximum number of XML tokens parsed from the SVG.
   final int maxElementCount;
+
+  /// Maximum XML nesting depth accepted while parsing.
   final int maxDepth;
+
+  /// Maximum XMP packet size in bytes.
   final int maxXmpSize;
+
+  /// Maximum UTF-8 length of a remote reference in bytes.
   final int maxRemoteReferenceLength;
 
   @override
@@ -513,6 +531,7 @@ final class SvgAssetHandler
   }
 }
 
+/// Backward-compatible alias for [SvgAssetHandler].
 typedef SvgHandler = SvgAssetHandler;
 
 enum _SvgMutation { embed, replace, remove }

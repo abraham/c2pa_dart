@@ -10,6 +10,10 @@ import '../hash_layout.dart';
 import '../xmp.dart';
 import '../xmp_remote_reference.dart';
 
+/// A RIFF-family handler for C2PA chunks.
+///
+/// Handles WebP, WAV, and AVI assets. The manifest is stored in a RIFF `C2PA`
+/// chunk, and XMP metadata is stored in an `XMP ` chunk.
 final class RiffAssetHandler
     implements
         AssetHandler,
@@ -17,6 +21,7 @@ final class RiffAssetHandler
         BoxHashLayoutProvider,
         XmpMetadataProvider,
         RemoteManifestReferenceProvider {
+  /// Creates a RIFF handler for one supported [format].
   const RiffAssetHandler({
     required this.format,
     this.maxManifestSize = 64 * 1024 * 1024,
@@ -50,12 +55,25 @@ final class RiffAssetHandler
   static const int _maximumChunkSize = 0xffffffff;
 
   @override
+  /// The RIFF-family format handled by this instance.
   final AssetFormat format;
+
+  /// Maximum embedded C2PA manifest size in bytes.
   final int maxManifestSize;
+
+  /// Maximum source RIFF asset size in bytes.
   final int maxSourceSize;
+
+  /// Maximum rewritten RIFF asset size in bytes.
   final int maxOutputSize;
+
+  /// Maximum number of RIFF chunks parsed from the asset.
   final int maxChunkCount;
+
+  /// Maximum XMP packet size in bytes.
   final int maxXmpSize;
+
+  /// Maximum UTF-8 length of a remote reference in bytes.
   final int maxRemoteReferenceLength;
 
   @override

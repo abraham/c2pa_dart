@@ -7,7 +7,9 @@ import 'byte_io_exceptions.dart';
 import 'byte_range.dart';
 import 'random_access_byte_source.dart';
 
+/// A browser [Blob]-backed random-access byte source.
 final class BlobByteSource implements RandomAccessByteSource {
+  /// Creates a source that reads the [Blob] in chunks up to [chunkSize].
   BlobByteSource(this._blob, {this.chunkSize = 4 * 1024 * 1024})
     : _bounds = ByteRange(0, _blob.size) {
     if (chunkSize <= 0) {
@@ -17,6 +19,8 @@ final class BlobByteSource implements RandomAccessByteSource {
 
   final Blob _blob;
   final ByteRange _bounds;
+
+  /// Maximum number of bytes requested from the [Blob] in a single slice.
   final int chunkSize;
 
   @override

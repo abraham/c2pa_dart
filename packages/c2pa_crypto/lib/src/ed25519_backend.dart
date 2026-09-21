@@ -5,6 +5,9 @@ import 'signing_algorithm.dart';
 
 /// Ed25519 signing using a caller-provided [SimpleKeyPairData].
 final class Ed25519SigningBackend implements CoseSigningBackend {
+  /// Creates an Ed25519 signer backed by `package:cryptography`.
+  ///
+  /// Throws [ArgumentError] if [keyPair] is not Ed25519 or is not 32 bytes.
   Ed25519SigningBackend(SimpleKeyPairData keyPair, {Ed25519? implementation})
     : _keyPair = _validateKeyPair(keyPair),
       _implementation = implementation ?? Ed25519();
@@ -24,6 +27,9 @@ final class Ed25519SigningBackend implements CoseSigningBackend {
 
 /// Ed25519 verification using a caller-provided [SimplePublicKey].
 final class Ed25519VerificationBackend implements CoseVerificationBackend {
+  /// Creates an Ed25519 verifier backed by `package:cryptography`.
+  ///
+  /// Throws [ArgumentError] if [publicKey] is not Ed25519 or is not 32 bytes.
   Ed25519VerificationBackend(
     SimplePublicKey publicKey, {
     Ed25519? implementation,

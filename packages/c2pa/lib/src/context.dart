@@ -7,15 +7,27 @@ import 'remote_manifest.dart';
 import 'settings.dart';
 import 'signing.dart';
 
+/// A high-level SDK operation reported through [C2paProgressEvent].
 enum C2paProgressPhase {
+  /// Source bytes are being loaded or inspected before manifest processing.
   loadingResource,
+
+  /// A remote manifest or referenced manifest is being resolved.
   resolvingRemoteManifest,
+
+  /// Claims, assertions, trust, or builder inputs are being validated.
   validating,
+
+  /// A manifest is being assembled and signed.
   signing,
+
+  /// A signature or validation binding is being verified.
   verifying,
 }
 
+/// A progress notification emitted while reading, validating, or signing.
 final class C2paProgressEvent {
+  /// Creates a progress notification for [phase].
   const C2paProgressEvent({
     required this.phase,
     this.completed,
@@ -24,26 +36,64 @@ final class C2paProgressEvent {
     this.uri,
   });
 
+  /// The operation phase currently being reported.
   final C2paProgressPhase phase;
+
+  /// The number of work units completed, or `null` when not measured.
   final int? completed;
+
+  /// The total number of work units, or `null` when the total is unknown.
   final int? total;
+
+  /// Optional human-readable detail associated with the progress event.
   final String? message;
+
+  /// The manifest, resource, or endpoint URI associated with the event.
   final Uri? uri;
 }
 
+/// Receives progress events and may complete asynchronously.
 typedef C2paProgressCallback = FutureOr<void> Function(C2paProgressEvent event);
+
+/// Reports whether the current operation should be cancelled.
+///
+/// Returning `true` asks cooperative SDK code to stop at its next check.
 typedef C2paCancellationCallback = FutureOr<bool> Function();
+
+/// Sends an OCSP request to [endpoint] and returns a DER response.
+///
+/// The [requestDer] argument is the encoded OCSP request body. Implementations
+/// perform any network I/O; the SDK does not install a default transport.
 typedef C2paOcspTransport = Future<Uint8List> Function(
   Uri endpoint,
   Uint8List requestDer,
 );
 
-enum CawgValidationPolicy { stopOnFirstFailure, continueWhenPossible }
+/// A policy for handling multiple CAWG identity validation failures.
+enum CawgValidationPolicy {
+  /// Stops CAWG validation after the first failure is recorded.
+  stopOnFirstFailure,
+
+  /// Records failures and keeps validating independent CAWG evidence.
+  continueWhenPossible,
+}
 
 /// Selects stable CAWG 1.1 behavior or c2pa-rs 0.90.22 compatibility.
-enum CawgIcaCompatibility { stable11, c2paRs09022 }
+enum CawgIcaCompatibility {
+  /// Applies the stable CAWG 1.1 identity-claims aggregation rules.
+  stable11,
 
+  /// Applies compatibility behavior used by c2pa-rs 0.90.22.
+  c2paRs09022,
+}
+
+/// Trust anchors and certificate policy used for signature validation.
 final class C2paTrustConfiguration {
+  /// Creates an immutable trust policy.
+  ///
+  /// Throws [ArgumentError] if [maxPathDepth] is less than 1, if any DER
+  /// byte list is empty or outside the byte range, or if an allowed end-entity
+  /// hash is not exactly 32 bytes.
   C2paTrustConfiguration({
     this.verifyTrust = false,
     Iterable<List<int>> trustAnchors = const [],
@@ -72,13 +122,33 @@ final class C2paTrustConfiguration {
     }
   }
 
+  /// Whether certificate path validation contributes trusted status.
+  ///
+  /// When `false`, trust inputs may still be stored but trust failures are not
+  /// promoted to successful trusted validation results.
   final bool verifyTrust;
+
+  /// DER-encoded root certificates trusted for path building.
   final List<Uint8List> trustAnchors;
+
+  /// DER-encoded intermediate certificates available for path building.
   final List<Uint8List> intermediates;
+
+  /// Allowed SHA-256 hashes of end-entity certificates.
+  ///
+  /// An empty list means no end-entity hash allow-list is enforced.
   final List<Uint8List> allowedEndEntitySha256Hashes;
+
+  /// Allowed extended-key-usage OIDs for end-entity certificates.
   final Set<String> allowedEkuOids;
+
+  /// UTC time used for certificate validity checks, or `null` for current time.
   final DateTime? evaluationTime;
+
+  /// Maximum certificate path depth, including the end-entity certificate.
   final int maxPathDepth;
+
+  /// Trust-list URIs configured for consumers that fetch trust material.
   final List<Uri> trustListUris;
 
   @override
@@ -109,10 +179,16 @@ final class C2paTrustConfiguration {
   );
 }
 
+/// Backwards-compatible alias for [C2paTrustConfiguration].
 typedef C2paTrustConfig = C2paTrustConfiguration;
 
 /// Immutable dependencies and policy used by future SDK operations.
 final class C2paContext {
+  /// Creates an immutable SDK execution context.
+  ///
+  /// Missing trust policies are default-deny, remote policies are derived from
+  /// [settings], and no signer, verifier, network, or OCSP transport is
+  /// installed unless supplied.
   C2paContext({
     this.settings = const C2paSettings(),
     C2paTrustConfiguration? trust,
@@ -143,11 +219,24 @@ final class C2paContext {
              maxRedirects: settings.maxRedirects,
            );
 
+  /// Limits and feature switches applied by SDK operations.
   final C2paSettings settings;
+
+  /// Trust policy used for manifest signing certificate chains.
   final C2paTrustConfiguration trust;
+
+  /// Trust policy used for timestamp-token certificate chains.
+  ///
+  /// Defaults to [trust] when [timestampTrust] is omitted.
   final C2paTrustConfiguration timestampTrust;
+
+  /// Trust policy used for CAWG identity assertions.
   final C2paTrustConfiguration cawgTrust;
+
+  /// Optional progress callback invoked by cooperative SDK operations.
   final C2paProgressCallback? onProgress;
+
+  /// Optional cancellation callback checked by long-running operations.
   final C2paCancellationCallback? isCancelled;
 
   /// Optional remote transport. No network resolver is installed by default.
@@ -155,17 +244,32 @@ final class C2paContext {
 
   /// Legacy resolver. Prefer [remoteResolver] for address-aware transports.
   final RemoteManifestResolver? remoteManifestResolver;
+
+  /// Policy used before any remote manifest fetch is attempted.
   final RemoteManifestPolicy remoteManifestPolicy;
 
   /// Optional did:web transport. No DID resolver is installed by default.
   final C2paRemoteResolver? didWebResolver;
+
+  /// Policy used before resolving did:web identity material.
   final RemoteManifestPolicy didWebPolicy;
+
+  /// CAWG validation failure-handling policy.
   final CawgValidationPolicy cawgValidationPolicy;
+
+  /// CAWG identity-claims aggregation compatibility mode.
   final CawgIcaCompatibility cawgIcaCompatibility;
+
+  /// Optional signer used when building signed manifests.
   final C2paSigner? signer;
+
+  /// Optional verifier used when checking externally supplied signatures.
   final C2paVerifier? verifier;
+
+  /// Optional OCSP transport used for revocation checks.
   final C2paOcspTransport? ocspTransport;
 
+  /// Invokes [onProgress] for [event] when a callback is configured.
   Future<void> reportProgress(C2paProgressEvent event) async {
     await onProgress?.call(event);
   }

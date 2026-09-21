@@ -6,24 +6,38 @@ import 'errors.dart';
 import 'handlers/isobmff_handler.dart';
 import 'isobmff.dart';
 
+/// A byte pattern that an ISO BMFF exclusion rule must match.
 final class IsoBmffDataMatch {
+  /// Creates a match at a box-relative byte [offset].
   IsoBmffDataMatch({required this.offset, required Iterable<int> value})
     : value = Uint8List.fromList(value.toList(growable: false));
 
+  /// Byte offset from the start of the matched box, including its header.
   final int offset;
+
+  /// The exact bytes that must appear at [offset].
   final Uint8List value;
 }
 
+/// A box-relative byte range excluded by an ISO BMFF hash rule.
 final class IsoBmffSubset {
+  /// Creates a subset at a box-relative byte [offset].
   const IsoBmffSubset({required this.offset, this.length = 0});
 
+  /// Byte offset from the start of the matched box, including its header.
   final int offset;
 
   /// Zero means through the end of the matched box.
   final int length;
 }
 
+/// A C2PA BMFF hash exclusion rule matched against parsed boxes.
 final class IsoBmffExclusion {
+  /// Creates a rule for boxes at absolute XPath-like [xpath].
+  ///
+  /// Matching can be narrowed by box [length], FullBox [version], [flags], and
+  /// [data]. If [subset] is empty the entire box is excluded; otherwise only
+  /// each box-relative subset is excluded from source-byte hashing.
   IsoBmffExclusion({
     required this.xpath,
     this.length,
@@ -38,16 +52,31 @@ final class IsoBmffExclusion {
            ? null
            : Uint8List.fromList(flags.toList(growable: false));
 
+  /// Absolute box path such as `/moov/uuid`; `//` and trailing `/` are invalid.
   final String xpath;
+
+  /// Required total box length in bytes, or `null` to ignore length.
   final int? length;
+
+  /// Box-relative byte patterns that all must match before exclusion.
   final List<IsoBmffDataMatch> data;
+
+  /// Ordered, non-overlapping box-relative byte ranges to exclude.
   final List<IsoBmffSubset> subset;
+
+  /// Required ISO BMFF FullBox version byte, or `null` to ignore it.
   final int? version;
+
+  /// Required three-byte FullBox flags value, or `null` to ignore flags.
   final Uint8List? flags;
+
+  /// Whether [flags] must equal the box flags instead of acting as a mask.
   final bool exact;
 }
 
+/// A parsed ISO BMFF box with tree position and FullBox metadata.
 final class IsoBmffBoxNode {
+  /// Creates a parsed node with immutable [children].
   IsoBmffBoxNode({
     required this.box,
     required this.path,
@@ -56,12 +85,22 @@ final class IsoBmffBoxNode {
     required Iterable<IsoBmffBoxNode> children,
   }) : children = List<IsoBmffBoxNode>.unmodifiable(children);
 
+  /// The box byte range and header metadata from the source segment.
   final IsoBmffBox box;
+
+  /// Absolute slash-separated box path used by exclusion rules.
   final String path;
+
+  /// FullBox version byte, or `null` when the box is not a FullBox.
   final int? version;
+
+  /// FullBox flags as a 24-bit integer, or `null` when absent.
   final int? flags;
+
+  /// Nested child boxes parsed from recognized container boxes.
   final List<IsoBmffBoxNode> children;
 
+  /// Depth-first descendants, excluding this node.
   Iterable<IsoBmffBoxNode> get descendants sync* {
     for (final child in children) {
       yield child;
@@ -70,31 +109,56 @@ final class IsoBmffBoxNode {
   }
 }
 
-enum IsoBmffDigestEventKind { sourceBytes, offset }
+/// A kind of input fed into the BMFF hash digest stream.
+///
+/// [sourceBytes] contributes bytes from the asset, while [offset] contributes
+/// an eight-byte logical box offset marker.
+enum IsoBmffDigestEventKind {
+  /// Source bytes copied from a non-excluded range of the asset.
+  sourceBytes,
 
+  /// Eight-byte logical box offset marker inserted into the digest stream.
+  offset,
+}
+
+/// One ordered contribution to an ISO BMFF hash digest stream.
 sealed class IsoBmffDigestEvent {
+  /// Creates a digest event at a stable [logicalOffset].
   const IsoBmffDigestEvent({
     required this.kind,
     required this.segmentIndex,
     required this.logicalOffset,
   });
 
+  /// The type of digest input represented by this event.
   final IsoBmffDigestEventKind kind;
+
+  /// Zero-based segment index; zero is the initialization segment.
   final int segmentIndex;
+
+  /// Byte offset in the stable logical stream used for event ordering.
   final int logicalOffset;
 }
 
+/// A digest event that contributes a contiguous source byte range.
 final class IsoBmffSourceDigestEvent extends IsoBmffDigestEvent {
+  /// Creates a source-byte event for [range].
   const IsoBmffSourceDigestEvent({
     required super.segmentIndex,
     required super.logicalOffset,
     required this.range,
   }) : super(kind: IsoBmffDigestEventKind.sourceBytes);
 
+  /// Segment-relative byte range included in the digest.
   final ByteRange range;
 }
 
+/// A digest event that contributes an encoded BMFF box offset marker.
 final class IsoBmffOffsetDigestEvent extends IsoBmffDigestEvent {
+  /// Creates an offset event for a segment-relative [boxOffset].
+  ///
+  /// Throws [MalformedBmffHashLayoutException] if [boxOffset] cannot be
+  /// represented in the supported unsigned 64-bit range.
   IsoBmffOffsetDigestEvent({
     required super.segmentIndex,
     required super.logicalOffset,
@@ -110,10 +174,13 @@ final class IsoBmffOffsetDigestEvent extends IsoBmffDigestEvent {
   /// fragments.
   final int logicalBoxOffset;
 
+  /// The big-endian eight-byte encoding of [boxOffset].
   final Uint8List bytes;
 }
 
+/// The resolved exclusions and digest events for one BMFF segment.
 final class IsoBmffHashLayout {
+  /// Creates a segment hash layout with immutable [boxes] and [events].
   IsoBmffHashLayout({
     required this.sourceLength,
     required this.logicalOffset,
@@ -125,15 +192,28 @@ final class IsoBmffHashLayout {
        exclusions = List<ByteRange>.unmodifiable(exclusions),
        events = List<IsoBmffDigestEvent>.unmodifiable(events);
 
+  /// Segment length in bytes.
   final int sourceLength;
+
+  /// Absolute byte offset of this segment in the logical fragmented stream.
   final int logicalOffset;
+
+  /// Zero-based segment index in the fragmented source.
   final int segmentIndex;
+
+  /// Top-level boxes parsed from this segment.
   final List<IsoBmffBoxNode> boxes;
+
+  /// Segment-relative byte ranges excluded from source-byte hashing.
   final List<ByteRange> exclusions;
+
+  /// Ordered digest inputs after applying exclusions and offset markers.
   final List<IsoBmffDigestEvent> events;
 }
 
+/// Metadata discovered in a C2PA ISO BMFF UUID box.
 final class IsoBmffC2paMetadata {
+  /// Creates metadata for one C2PA UUID box.
   IsoBmffC2paMetadata({
     required this.purpose,
     required this.boxRange,
@@ -144,30 +224,53 @@ final class IsoBmffC2paMetadata {
     this.auxiliaryOffset,
   });
 
+  /// C2PA purpose string, such as `manifest`, `update`, or `merkle`.
   final String purpose;
+
+  /// Segment-relative byte range covering the full UUID box.
   final ByteRange boxRange;
+
+  /// Segment-relative byte range of C2PA payload bytes to hash or extract.
   final ByteRange dataRange;
+
+  /// Absolute logical byte offset of the UUID box in fragmented order.
   final int logicalBoxOffset;
+
+  /// FullBox version byte from the C2PA UUID box; currently zero.
   final int version;
+
+  /// FullBox flags from the C2PA UUID box; currently zero.
   final int flags;
+
+  /// Auxiliary offset field for manifest-like boxes, or `null` for merkle.
   final int? auxiliaryOffset;
 
+  /// Whether [purpose] identifies a merkle data box.
   bool get isMerkle => purpose == 'merkle';
+
+  /// Whether [purpose] identifies a C2PA manifest-store box.
   bool get isManifest =>
       purpose == 'manifest' || purpose == 'original' || purpose == 'update';
 }
 
+/// An ISO BMFF initialization segment plus media fragments.
 final class FragmentedIsoBmffSource {
+  /// Creates a fragmented source with immutable [fragments].
   FragmentedIsoBmffSource({
     required this.initializationSegment,
     required Iterable<RandomAccessByteSource> fragments,
   }) : fragments = List<RandomAccessByteSource>.unmodifiable(fragments);
 
+  /// The first segment, which must begin with an `ftyp` box.
   final RandomAccessByteSource initializationSegment;
+
+  /// Media fragments ordered by `mfhd` sequence number.
   final List<RandomAccessByteSource> fragments;
 }
 
+/// Hash layout and C2PA metadata for one fragmented BMFF segment.
 final class FragmentedIsoBmffSegment {
+  /// Creates metadata for a logical segment.
   FragmentedIsoBmffSegment({
     required this.index,
     required this.isInitialization,
@@ -178,26 +281,51 @@ final class FragmentedIsoBmffSegment {
     required Iterable<IsoBmffC2paMetadata> c2paMetadata,
   }) : c2paMetadata = List<IsoBmffC2paMetadata>.unmodifiable(c2paMetadata);
 
+  /// Zero-based segment index; zero is the initialization segment.
   final int index;
+
+  /// Whether this segment is the initialization segment.
   final bool isInitialization;
+
+  /// Absolute byte offset of the segment in the logical concatenation.
   final int logicalOffset;
+
+  /// Segment length in bytes.
   final int length;
+
+  /// `mfhd` sequence number, or `null` for the initialization segment.
   final int? sequenceNumber;
+
+  /// Resolved BMFF hash layout for this segment.
   final IsoBmffHashLayout hashLayout;
+
+  /// C2PA UUID boxes discovered in this segment.
   final List<IsoBmffC2paMetadata> c2paMetadata;
 }
 
+/// The logical BMFF layout across initialization and fragment segments.
 final class FragmentedIsoBmffLayout {
+  /// Creates a fragmented layout with immutable [segments].
   FragmentedIsoBmffLayout({
     required this.logicalLength,
     required Iterable<FragmentedIsoBmffSegment> segments,
   }) : segments = List<FragmentedIsoBmffSegment>.unmodifiable(segments);
 
+  /// Total logical length in bytes across all segments.
   final int logicalLength;
+
+  /// Segment layouts in logical order.
   final List<FragmentedIsoBmffSegment> segments;
 }
 
+/// Interface for handlers that resolve C2PA BMFF hash layouts.
 abstract interface class IsoBmffHashLayoutProvider {
+  /// Resolves exclusions and digest events for a single BMFF [source].
+  ///
+  /// [logicalOffset] and [segmentIndex] identify this source within a
+  /// fragmented logical stream. Throws [MalformedBmffHashLayoutException] for
+  /// invalid exclusion rules and [MalformedAssetFormatException] for invalid
+  /// BMFF structure.
   Future<IsoBmffHashLayout> getBmffHashLayout(
     RandomAccessByteSource source,
     List<IsoBmffExclusion> exclusions, {
@@ -206,6 +334,10 @@ abstract interface class IsoBmffHashLayoutProvider {
     int segmentIndex = 0,
   });
 
+  /// Resolves BMFF hash layouts across initialization and media fragments.
+  ///
+  /// Fragments must be ordered by increasing `mfhd` sequence number, and the
+  /// initialization segment must begin with `ftyp`.
   Future<FragmentedIsoBmffLayout> getFragmentedBmffLayout(
     FragmentedIsoBmffSource source,
     List<IsoBmffExclusion> exclusions, {
@@ -213,7 +345,9 @@ abstract interface class IsoBmffHashLayoutProvider {
   });
 }
 
+/// Reader for C2PA BMFF hash layouts defined over ISO BMFF boxes.
 final class IsoBmffHashLayoutReader {
+  /// Creates a reader with safety limits for untrusted BMFF input.
   const IsoBmffHashLayoutReader({
     this.maxSourceSize = 512 * 1024 * 1024,
     this.maxTotalFragmentedSize = 2 * 1024 * 1024 * 1024,
@@ -224,14 +358,33 @@ final class IsoBmffHashLayoutReader {
     this.maxMatches = 1024 * 1024,
   });
 
+  /// Maximum bytes accepted for one BMFF segment.
   final int maxSourceSize;
+
+  /// Maximum combined logical bytes accepted across fragments.
   final int maxTotalFragmentedSize;
+
+  /// Maximum number of boxes parsed from one segment tree.
   final int maxBoxCount;
+
+  /// Maximum nested container depth while parsing boxes.
   final int maxDepth;
+
+  /// Maximum number of media fragments after the initialization segment.
   final int maxFragments;
+
+  /// Maximum number of exclusion rules accepted per layout request.
   final int maxRules;
+
+  /// Maximum number of boxes matched by exclusion rules.
   final int maxMatches;
 
+  /// Reads one BMFF segment and resolves its C2PA hash layout.
+  ///
+  /// Offsets in [exclusions] are relative to matched boxes; returned
+  /// layout's `exclusions` are absolute within [source]. Version 1 emits only
+  /// source-byte events, while later versions also emit box-offset events for
+  /// boxes that are not fully excluded.
   Future<IsoBmffHashLayout> read(
     RandomAccessByteSource source,
     List<IsoBmffExclusion> exclusions, {
@@ -285,6 +438,10 @@ final class IsoBmffHashLayoutReader {
     );
   }
 
+  /// Reads an initialization segment and fragments as one logical BMFF stream.
+  ///
+  /// The first segment must begin with `ftyp`; each later segment must contain
+  /// one top-level `moof` with one `mfhd` FullBox, ordered by sequence number.
   Future<FragmentedIsoBmffLayout> readFragmented(
     FragmentedIsoBmffSource source,
     List<IsoBmffExclusion> exclusions, {

@@ -2,7 +2,14 @@ import 'dart:typed_data';
 
 import 'json_utils.dart';
 
+/// Bytes that must match at an offset before BMFF hash replacement.
+///
+/// Used by exclusion rules to inject deterministic bytes into the digest stream
+/// when a mutable BMFF field is excluded.
 final class BmffHashDataReplacement {
+  /// Creates a replacement at byte [offset] within the matched box.
+  ///
+  /// Throws [FormatException] if [offset] is negative or [value] is empty.
   BmffHashDataReplacement({required this.offset, required List<int> value})
     : value = Uint8List.fromList(value).asUnmodifiableView() {
     if (offset < 0 || this.value.isEmpty) {
@@ -10,6 +17,10 @@ final class BmffHashDataReplacement {
     }
   }
 
+  /// Decodes a BMFF data replacement from a CBOR map.
+  ///
+  /// Throws [FormatException] when required keys are missing, unknown keys are
+  /// present, or values have the wrong type.
   factory BmffHashDataReplacement.fromCbor(Object? value) {
     final map = _strictMap(value, const {
       'offset',
@@ -25,9 +36,16 @@ final class BmffHashDataReplacement {
     );
   }
 
+  /// Byte offset within the matched BMFF box.
   final int offset;
+
+  /// Non-empty byte sequence expected or injected at [offset].
   final Uint8List value;
 
+  /// Encodes this replacement using BMFF hash assertion CBOR keys.
+  /// Encodes this exclusion using BMFF hash assertion CBOR keys.
+  /// Encodes this Merkle map using BMFF hash assertion CBOR keys.
+  /// Encodes this proof using BMFF `merkle` UUID box CBOR keys.
   Map<String, Object?> toCborMap() => {'offset': offset, 'value': value};
 
   @override
@@ -40,11 +58,18 @@ final class BmffHashDataReplacement {
   int get hashCode => Object.hash(offset, deepHash(value));
 }
 
+/// A byte range inside a matched BMFF box that remains hash-covered.
 final class BmffHashSubset {
+  /// Creates a subset beginning at byte [offset].
+  ///
+  /// [length] is in bytes, and `0` means through the end of the matched box.
   const BmffHashSubset({required this.offset, this.length = 0})
     : assert(offset >= 0),
       assert(length >= 0);
 
+  /// Decodes a BMFF exclusion subset from a CBOR map.
+  ///
+  /// Throws [FormatException] when offsets or lengths are missing or negative.
   factory BmffHashSubset.fromCbor(Object? value) {
     final map = _strictMap(value, const {'offset', 'length'}, 'subset');
     if (map['offset'] is! int ||
@@ -59,11 +84,13 @@ final class BmffHashSubset {
     );
   }
 
+  /// Byte offset within the matched BMFF box.
   final int offset;
 
   /// Zero means through the end of the matched box.
   final int length;
 
+  /// Encodes this subset using BMFF hash assertion CBOR keys.
   Map<String, Object?> toCborMap() => {'offset': offset, 'length': length};
 
   @override
@@ -76,7 +103,16 @@ final class BmffHashSubset {
   int get hashCode => Object.hash(offset, length);
 }
 
+/// A BMFF box exclusion rule used by the C2PA BMFF hash assertion.
+///
+/// The [xpath] selects boxes to exclude or partially hash; [data] replacement
+/// rules and [subsets] describe bytes that remain deterministic.
 final class BmffHashExclusion {
+  /// Creates a BMFF exclusion rule.
+  ///
+  /// Throws [FormatException] if [xpath] is not absolute, lengths are negative,
+  /// [version] is outside the uint8 range, [flags] is not three bytes, or
+  /// [subsets] are overlapping or out of order.
   BmffHashExclusion({
     required this.xpath,
     this.length,
@@ -117,6 +153,10 @@ final class BmffHashExclusion {
     }
   }
 
+  /// Decodes a BMFF exclusion rule from a CBOR map.
+  ///
+  /// Throws [FormatException] when the map contains unknown fields or malformed
+  /// exclusion, replacement, subset, version, flag, or exact-match values.
   factory BmffHashExclusion.fromCbor(Object? value) {
     final map = _strictMap(value, const {
       'xpath',
@@ -151,14 +191,28 @@ final class BmffHashExclusion {
     );
   }
 
+  /// Absolute BMFF box path expression, such as `/moov/uuid`.
   final String xpath;
+
+  /// Number of bytes excluded from the matched box, or `null` for default.
   final int? length;
+
+  /// Deterministic replacement byte checks for the excluded box data.
   final List<BmffHashDataReplacement> data;
+
+  /// Ordered, non-overlapping byte subsets that remain hash-covered.
   final List<BmffHashSubset> subsets;
+
+  /// Full-box version byte to match, or `null` when not constrained.
   final int? version;
+
+  /// Three full-box flag bytes to match, or `null` when not constrained.
   final Uint8List? flags;
+
+  /// Whether the [xpath] match must be exact; `null` defaults to exact.
   final bool? exact;
 
+  /// Encodes this exclusion using BMFF hash assertion CBOR keys.
   Map<String, Object?> toCborMap() => {
     'xpath': xpath,
     if (length != null) 'length': length,
@@ -196,6 +250,11 @@ final class BmffHashExclusion {
 
 /// One v3 BMFF Merkle map.
 final class MerkleMap {
+  /// Creates a Merkle map for fragmented BMFF verification.
+  ///
+  /// Throws [FormatException] when identifiers are negative, [count] is not
+  /// positive, hash rows are incomplete, algorithms are unsupported, or fixed
+  /// and variable block sizing are both supplied.
   MerkleMap({
     required this.uniqueId,
     required this.localId,
@@ -258,6 +317,10 @@ final class MerkleMap {
     }
   }
 
+  /// Decodes a BMFF Merkle map from a CBOR map.
+  ///
+  /// Throws [FormatException] when map fields are missing, unknown, malformed,
+  /// or inconsistent with the declared digest algorithm.
   factory MerkleMap.fromCbor(Object? value) {
     final map = _strictMap(value, const {
       'uniqueId',
@@ -299,15 +362,31 @@ final class MerkleMap {
     );
   }
 
+  /// Assertion-level identifier shared by map and per-fragment proofs.
   final int uniqueId;
+
+  /// Local identifier shared by map and per-fragment proofs.
   final int localId;
+
+  /// Number of fragment leaves covered by the Merkle tree.
   final int count;
+
+  /// Digest algorithm for the Merkle hashes, or `null` to use a fallback.
   final String? algorithm;
+
+  /// Digest of the initialization segment, or `null` if absent.
   final Uint8List? initHash;
+
+  /// One complete Merkle tree row used as proof anchors.
   final List<Uint8List> hashes;
+
+  /// Maximum digest-covered bytes per fragment, or `null` if variable.
   final int? fixedBlockSize;
+
+  /// Digest-covered bytes for each fragment, or `null` if fixed or omitted.
   final List<int>? variableBlockSizes;
 
+  /// Encodes this Merkle map using BMFF hash assertion CBOR keys.
   Map<String, Object?> toCborMap() => {
     'uniqueId': uniqueId,
     'localId': localId,
@@ -346,6 +425,10 @@ final class MerkleMap {
 
 /// Per-fragment proof stored in a C2PA `merkle` UUID box.
 final class BmffMerkleProof {
+  /// Creates a per-fragment Merkle proof.
+  ///
+  /// Throws [FormatException] if identifiers or [location] are negative, or if
+  /// any supplied sibling hash is empty.
   BmffMerkleProof({
     required this.uniqueId,
     required this.localId,
@@ -366,6 +449,10 @@ final class BmffMerkleProof {
     }
   }
 
+  /// Decodes a per-fragment Merkle proof from a CBOR map.
+  ///
+  /// Throws [FormatException] when the map is malformed or sibling hashes are
+  /// not byte strings.
   factory BmffMerkleProof.fromCbor(Object? value) {
     final map = _strictMap(value, const {
       'uniqueId',
@@ -392,11 +479,21 @@ final class BmffMerkleProof {
     );
   }
 
+  /// Assertion-level identifier that must match the [MerkleMap].
   final int uniqueId;
+
+  /// Local identifier that must match the [MerkleMap].
   final int localId;
+
+  /// Zero-based fragment index proven by this proof.
   final int location;
+
+  /// Sibling hashes from leaf toward the anchored Merkle row.
+  ///
+  /// A `null` value means the proof carries no explicit sibling path.
   final List<Uint8List>? hashes;
 
+  /// Encodes this proof using BMFF `merkle` UUID box CBOR keys.
   Map<String, Object?> toCborMap() => {
     'uniqueId': uniqueId,
     'localId': localId,
@@ -419,6 +516,10 @@ final class BmffMerkleProof {
 
 /// Typed v3 `c2pa.hash.bmff` hard-binding assertion.
 final class BmffHashAssertion {
+  /// Creates a typed BMFF hard-binding assertion.
+  ///
+  /// Throws [FormatException] when [exclusions] is empty, [algorithm] is blank,
+  /// both [hash] and [merkle] are supplied, or [merkle] is empty.
   BmffHashAssertion({
     required Iterable<BmffHashExclusion> exclusions,
     this.algorithm,
@@ -444,6 +545,10 @@ final class BmffHashAssertion {
     }
   }
 
+  /// Decodes a BMFF hash assertion from CBOR.
+  ///
+  /// Throws [FormatException] when exclusions, direct hash binding, Merkle
+  /// binding, or assertion metadata are malformed.
   factory BmffHashAssertion.fromCbor(Object? value) {
     final map = _strictMap(value, const {
       'exclusions',
@@ -470,8 +575,13 @@ final class BmffHashAssertion {
     );
   }
 
+  /// Versioned assertion label for C2PA BMFF hash assertion v3.
   static const label = 'c2pa.hash.bmff.v3';
+
+  /// Base assertion label shared by all BMFF hash assertion versions.
   static const baseLabel = 'c2pa.hash.bmff';
+
+  /// Assertion version implemented by [label].
   static const version = 3;
 
   /// Whether [label] names a BMFF hard binding of any assertion version.
@@ -494,12 +604,24 @@ final class BmffHashAssertion {
     return int.tryParse(suffix);
   }
 
+  /// Box exclusions and deterministic substitutions used while hashing.
   final List<BmffHashExclusion> exclusions;
+
+  /// Digest algorithm for [hash] or Merkle leaves, or `null` for fallback.
   final String? algorithm;
+
+  /// Direct digest over the non-fragmented BMFF hash stream.
+  ///
+  /// A `null` value indicates the assertion uses [merkle] instead.
   final Uint8List? hash;
+
+  /// Merkle maps for fragmented BMFF verification, or `null` for [hash].
   final List<MerkleMap>? merkle;
+
+  /// Optional producer-defined name for the hard binding.
   final String? name;
 
+  /// Encodes this assertion using BMFF hash assertion CBOR keys.
   Map<String, Object?> toCborMap() => {
     'exclusions': exclusions
         .map((item) => item.toCborMap())

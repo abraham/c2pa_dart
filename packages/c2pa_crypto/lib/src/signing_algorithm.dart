@@ -2,24 +2,37 @@ import 'hash_algorithm.dart';
 
 /// Signing algorithms supported by the C2PA cryptographic foundation.
 enum SigningAlgorithm {
+  /// ECDSA using P-256 and SHA-256; COSE algorithm identifier `-7`.
   es256(
     coseId: -7,
     hashAlgorithm: HashAlgorithm.sha256,
     p1363ComponentLength: 32,
   ),
+
+  /// ECDSA using P-384 and SHA-384; COSE algorithm identifier `-35`.
   es384(
     coseId: -35,
     hashAlgorithm: HashAlgorithm.sha384,
     p1363ComponentLength: 48,
   ),
+
+  /// ECDSA using P-521 and SHA-512; COSE algorithm identifier `-36`.
   es512(
     coseId: -36,
     hashAlgorithm: HashAlgorithm.sha512,
     p1363ComponentLength: 66,
   ),
+
+  /// RSA-PSS using SHA-256 and digest-sized salt; COSE identifier `-37`.
   ps256(coseId: -37, hashAlgorithm: HashAlgorithm.sha256),
+
+  /// RSA-PSS using SHA-384 and digest-sized salt; COSE identifier `-38`.
   ps384(coseId: -38, hashAlgorithm: HashAlgorithm.sha384),
+
+  /// RSA-PSS using SHA-512 and digest-sized salt; COSE identifier `-39`.
   ps512(coseId: -39, hashAlgorithm: HashAlgorithm.sha512),
+
+  /// Ed25519 with hashing intrinsic to the algorithm; COSE identifier `-8`.
   ed25519(coseId: -8);
 
   const SigningAlgorithm({

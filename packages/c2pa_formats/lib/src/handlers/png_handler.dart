@@ -10,6 +10,10 @@ import '../hash_layout.dart';
 import '../xmp.dart';
 import '../xmp_remote_reference.dart';
 
+/// A PNG handler for C2PA `caBX` chunks.
+///
+/// The manifest is stored in a `caBX` ancillary chunk. XMP metadata is read
+/// from `iTXt` chunks whose keyword is `XML:com.adobe.xmp`.
 final class PngAssetHandler
     implements
         AssetHandler,
@@ -17,6 +21,7 @@ final class PngAssetHandler
         BoxHashLayoutProvider,
         XmpMetadataProvider,
         RemoteManifestReferenceProvider {
+  /// Creates a PNG handler with chunk and byte limits.
   const PngAssetHandler({
     this.maxManifestSize = 64 * 1024 * 1024,
     this.maxSourceSize = 256 * 1024 * 1024,
@@ -47,10 +52,19 @@ final class PngAssetHandler
   static const List<int> _textChunkType = <int>[0x69, 0x54, 0x58, 0x74];
   static const String _xmpKeyword = 'XML:com.adobe.xmp';
 
+  /// Maximum embedded C2PA manifest size in bytes.
   final int maxManifestSize;
+
+  /// Maximum source PNG size in bytes.
   final int maxSourceSize;
+
+  /// Maximum rewritten PNG size in bytes.
   final int maxOutputSize;
+
+  /// Maximum XMP packet size in bytes.
   final int maxXmpSize;
+
+  /// Maximum UTF-8 length of a remote reference in bytes.
   final int maxRemoteReferenceLength;
 
   @override
@@ -635,6 +649,7 @@ final class PngAssetHandler
   }
 }
 
+/// Backward-compatible alias for [PngAssetHandler].
 typedef PngHandler = PngAssetHandler;
 
 enum _PngMutation { embed, replace, remove }

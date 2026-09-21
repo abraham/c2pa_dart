@@ -7,7 +7,9 @@ import 'dart:typed_data';
 import 'package:c2pa/c2pa.dart';
 import 'package:c2pa_crypto/c2pa_crypto.dart';
 
+/// Failure reported by a subprocess-based C2PA signer.
 final class SubprocessSignerException extends C2paSigningException {
+  /// Creates an exception with [message] and optional underlying [cause].
   const SubprocessSignerException(super.message, {super.cause});
 }
 
@@ -17,6 +19,7 @@ final class SubprocessSignerException extends C2paSigningException {
 /// the raw signature to stdout. Diagnostics belong on stderr. The algorithm is
 /// also available as `C2PA_SIGNING_ALGORITHM`.
 final class SubprocessC2paSigner implements C2paReservedSizeSigner {
+  /// Creates a signer that invokes [executable] directly without a shell.
   SubprocessC2paSigner({
     required this.executable,
     required this.algorithm,
@@ -39,18 +42,36 @@ final class SubprocessC2paSigner implements C2paReservedSizeSigner {
     }
   }
 
+  /// Executable path or name passed to [Process.start].
   final String executable;
+
+  /// Arguments passed to [executable] before any payload is written to stdin.
   final List<String> arguments;
+
+  /// C2PA signing algorithm advertised to the subprocess environment.
   @override
   final String algorithm;
+
+  /// Maximum wall-clock duration allowed for one subprocess signature.
   final Duration timeout;
+
+  /// Maximum number of signature bytes accepted from subprocess stdout.
   final int maximumSignatureBytes;
+
+  /// Maximum number of diagnostic bytes accepted from subprocess stderr.
   final int maximumDiagnosticBytes;
+
+  /// Number of bytes reserved in C2PA structures for the final signature.
   @override
   final int reservedSignatureSize;
+
+  /// Additional environment variables passed to the signer subprocess.
   final Map<String, String> environment;
+
+  /// Optional working directory for the signer subprocess.
   final String? workingDirectory;
 
+  /// Signs [data] by writing it to subprocess stdin and reading stdout.
   @override
   Future<Uint8List> sign(Uint8List data) async {
     Process process;
@@ -298,6 +319,7 @@ final class _SecureEd25519Input {
   }
 }
 
+/// Resolves [executable] from [path] without searching relative directories.
 String? resolveExecutableFromPath({
   required String executable,
   required String? path,
@@ -361,6 +383,7 @@ List<String> _windowsExecutableExtensions(String? pathExt) {
 /// names are resolved only in absolute `PATH` entries; empty and relative
 /// entries are ignored so the current directory is never searched implicitly.
 final class LocalKeyC2paSigner implements C2paReservedSizeSigner {
+  /// Creates an OpenSSL-backed signer for the private key at [keyPath].
   LocalKeyC2paSigner({
     required this.keyPath,
     required this.algorithm,
@@ -371,15 +394,27 @@ final class LocalKeyC2paSigner implements C2paReservedSizeSigner {
   }) : reservedSignatureSize =
            reservedSignatureSize ?? _defaultSignatureSize(algorithm);
 
+  /// Path to the PEM or DER private key passed to OpenSSL.
   final String keyPath;
+
+  /// C2PA signing algorithm used to choose the OpenSSL signing command.
   @override
   final String algorithm;
+
+  /// Absolute OpenSSL path or bare name resolved from absolute `PATH` entries.
   final String opensslExecutable;
+
+  /// Maximum wall-clock duration allowed for each OpenSSL invocation.
   final Duration timeout;
+
+  /// Optional directory used for temporary Ed25519 payload files.
   final String? ed25519TemporaryRoot;
+
+  /// Number of bytes reserved in C2PA structures for the final signature.
   @override
   final int reservedSignatureSize;
 
+  /// Signs [data] with the configured local private key.
   @override
   Future<Uint8List> sign(Uint8List data) async {
     final normalized = algorithm.toLowerCase().replaceAll(RegExp(r'[-_]'), '');

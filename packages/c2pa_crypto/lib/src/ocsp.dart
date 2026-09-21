@@ -14,23 +14,39 @@ typedef OcspTransport = Future<List<int>> Function(
   List<int> requestDer,
 );
 
+/// Object identifiers used in RFC 6960 OCSP messages.
 abstract final class OcspOids {
+  /// The id-pkix-ocsp-basic response type OID from RFC 6960.
   static const basicResponse = '1.3.6.1.5.5.7.48.1.1';
+
+  /// The id-pkix-ocsp-nonce extension OID from RFC 6960.
   static const nonce = '1.3.6.1.5.5.7.48.1.2';
 }
 
 /// Digest algorithms accepted in OCSP CertID values.
 enum OcspCertIdHashAlgorithm {
+  /// SHA-1 CertID hash algorithm, encoded as a 20-byte digest.
   sha1('1.3.14.3.2.26', 20),
+
+  /// SHA-256 CertID hash algorithm, encoded as a 32-byte digest.
   sha256('2.16.840.1.101.3.4.2.1', 32),
+
+  /// SHA-384 CertID hash algorithm, encoded as a 48-byte digest.
   sha384('2.16.840.1.101.3.4.2.2', 48),
+
+  /// SHA-512 CertID hash algorithm, encoded as a 64-byte digest.
   sha512('2.16.840.1.101.3.4.2.3', 64);
 
+  /// Creates RFC 6960 CertID hash metadata.
   const OcspCertIdHashAlgorithm(this.oid, this.digestLength);
 
+  /// The OBJECT IDENTIFIER used in the CertID AlgorithmIdentifier.
   final String oid;
+
+  /// The exact number of bytes required for issuer name and key hashes.
   final int digestLength;
 
+  /// Computes this CertID hash over [input] without performing network I/O.
   Future<List<int>> digest(List<int> input) async => switch (this) {
     sha1 => (await cryptography.Sha1().hash(input)).bytes,
     sha256 => await HashAlgorithm.sha256.digest(input),
@@ -39,17 +55,35 @@ enum OcspCertIdHashAlgorithm {
   };
 }
 
+/// Top-level OCSPResponseStatus values from RFC 6960 section 4.2.1.
 enum OcspResponseStatus {
+  /// The responder produced a successful OCSP response.
   successful(0),
+
+  /// The request is malformed according to the OCSP responder.
   malformedRequest(1),
+
+  /// The responder encountered an internal error.
   internalError(2),
+
+  /// The responder asks the client to try the request later.
   tryLater(3),
+
+  /// The responder requires the OCSP request to be signed.
   signatureRequired(5),
+
+  /// The responder is not authorized for this request.
   unauthorized(6);
 
+  /// Creates a response status carrying its RFC 6960 integer [value].
   const OcspResponseStatus(this.value);
+
+  /// The integer value encoded in the OCSPResponseStatus ENUMERATED.
   final int value;
 
+  /// Parses an RFC 6960 OCSPResponseStatus integer.
+  ///
+  /// Throws a [FormatException] if [value] is not a defined status.
   static OcspResponseStatus fromValue(int value) {
     for (final status in values) {
       if (status.value == value) {
@@ -60,23 +94,59 @@ enum OcspResponseStatus {
   }
 }
 
-enum OcspCertStatus { good, revoked, unknown }
+/// Certificate status choices in an RFC 6960 SingleResponse.
+enum OcspCertStatus {
+  /// The responder asserts that the certificate is not revoked.
+  good,
 
+  /// The responder asserts that the certificate has been revoked.
+  revoked,
+
+  /// The responder does not know the certificate's status.
+  unknown,
+}
+
+/// RevokedInfo reason codes carried by RFC 6960 OCSP responses.
 enum OcspRevocationReason {
+  /// No specific revocation reason was supplied.
   unspecified(0),
+
+  /// The subject certificate private key was compromised.
   keyCompromise(1),
+
+  /// The issuing CA private key was compromised.
   caCompromise(2),
+
+  /// The subject's affiliation changed.
   affiliationChanged(3),
+
+  /// The certificate was superseded.
   superseded(4),
+
+  /// The subject ceased operation.
   cessationOfOperation(5),
+
+  /// The certificate is temporarily on hold.
   certificateHold(6),
+
+  /// The certificate was removed from a CRL.
   removeFromCrl(8),
+
+  /// The subject's privilege was withdrawn.
   privilegeWithdrawn(9),
+
+  /// The attribute authority was compromised.
   aaCompromise(10);
 
+  /// Creates an OCSP revocation reason carrying its RFC 5280 code.
   const OcspRevocationReason(this.value);
+
+  /// The integer value encoded in the CRLReason ENUMERATED.
   final int value;
 
+  /// Parses an RFC 5280 CRLReason integer.
+  ///
+  /// Throws a [FormatException] if [value] is not a defined reason.
   static OcspRevocationReason fromValue(int value) {
     for (final reason in values) {
       if (reason.value == value) {
@@ -97,12 +167,19 @@ final class OcspCertId {
   }) : _issuerNameHash = Uint8List.fromList(issuerNameHash),
        _issuerKeyHash = Uint8List.fromList(issuerKeyHash);
 
+  /// The hash algorithm used by the RFC 6960 CertID.
   final OcspCertIdHashAlgorithm hashAlgorithm;
+
   final Uint8List _issuerNameHash;
   final Uint8List _issuerKeyHash;
+
+  /// The positive certificate serial number encoded in the CertID.
   final BigInt serialNumber;
 
+  /// A defensive copy of the issuer Name hash bytes.
   Uint8List get issuerNameHash => Uint8List.fromList(_issuerNameHash);
+
+  /// A defensive copy of the issuer SubjectPublicKey BIT STRING hash bytes.
   Uint8List get issuerKeyHash => Uint8List.fromList(_issuerKeyHash);
 }
 
@@ -117,31 +194,52 @@ final class OcspSingleResponse {
     required this.revocationReason,
   });
 
+  /// The RFC 6960 CertID identifying the certificate this entry covers.
   final OcspCertId certId;
+
+  /// The OCSP certificate status asserted by this SingleResponse.
   final OcspCertStatus status;
+
+  /// The UTC time at which the responder knew this status to be correct.
   final DateTime thisUpdate;
+
+  /// The UTC time by which newer information is expected, or `null`.
   final DateTime? nextUpdate;
+
+  /// The UTC revocation time when [status] is `OcspCertStatus.revoked`.
   final DateTime? revocationTime;
+
+  /// The optional revocation reason when [status] is `OcspCertStatus.revoked`.
   final OcspRevocationReason? revocationReason;
 }
 
+/// ResponderID selector from RFC 6960 response data.
 sealed class OcspResponderId {
+  /// Creates a responder identifier variant.
   const OcspResponderId();
 }
 
+/// ResponderID variant that identifies the responder by X.509 Name.
 final class OcspResponderByName extends OcspResponderId {
+  /// Creates a byName responder identifier from encoded Name [nameDer].
   OcspResponderByName(List<int> nameDer)
     : _nameDer = Uint8List.fromList(nameDer);
 
   final Uint8List _nameDer;
+
+  /// A defensive copy of the DER-encoded responder Name.
   Uint8List get nameDer => Uint8List.fromList(_nameDer);
 }
 
+/// ResponderID variant that identifies the responder by SHA-1 key hash.
 final class OcspResponderByKey extends OcspResponderId {
+  /// Creates a byKey responder identifier from a 20-byte [keyHash].
   OcspResponderByKey(List<int> keyHash)
     : _keyHash = Uint8List.fromList(keyHash);
 
   final Uint8List _keyHash;
+
+  /// A defensive copy of the responder SHA-1 key hash bytes.
   Uint8List get keyHash => Uint8List.fromList(_keyHash);
 }
 
@@ -168,24 +266,49 @@ final class OcspResponse {
            : Uint8List.fromList(tbsResponseDataDer);
 
   final Uint8List _der;
+
+  /// The outer OCSPResponseStatus from RFC 6960 section 4.2.1.
   final OcspResponseStatus responseStatus;
+
+  /// The BasicOCSPResponse responder identifier, or `null` on failure status.
   final OcspResponderId? responderId;
+
+  /// The UTC time at which the responder produced the response data.
   final DateTime? producedAt;
+
+  /// The immutable SingleResponse entries parsed from the basic response.
   final List<OcspSingleResponse> responses;
+
   final Uint8List? _nonce;
+
+  /// Certificates embedded in the BasicOCSPResponse certificate list.
   final List<X509Certificate> certificates;
+
+  /// The signature AlgorithmIdentifier, or `null` on non-success status.
   final X509AlgorithmIdentifier? signatureAlgorithm;
+
   final Uint8List? _signature;
   final Uint8List? _tbsResponseDataDer;
 
+  /// A defensive copy of the complete DER OCSPResponse.
   Uint8List get der => Uint8List.fromList(_der);
+
+  /// The response nonce bytes, or `null` when no nonce extension was present.
   Uint8List? get nonce => _nonce == null ? null : Uint8List.fromList(_nonce);
+
+  /// The BasicOCSPResponse signature bytes, or `null` on non-success status.
   Uint8List? get signature =>
       _signature == null ? null : Uint8List.fromList(_signature);
+
+  /// The signed ResponseData DER, or `null` on non-success status.
   Uint8List? get tbsResponseDataDer => _tbsResponseDataDer == null
       ? null
       : Uint8List.fromList(_tbsResponseDataDer);
 
+  /// Parses a DER OCSPResponse without performing network I/O.
+  ///
+  /// Throws a [FormatException] for malformed DER or unsupported structure, and
+  /// an [UnsupportedError] for unsupported CertID hash algorithms.
   factory OcspResponse.parse(List<int> input) {
     _validateBytes(input, 'input');
     final der = Uint8List.fromList(input);
@@ -217,33 +340,81 @@ final class OcspResponse {
   }
 }
 
-enum OcspResultStatus { good, revoked, unknown, inaccessible, malformed }
+/// High-level OCSP verification status produced by this package.
+enum OcspResultStatus {
+  /// Fresh, trusted evidence says the certificate is not revoked.
+  good,
 
+  /// Fresh, trusted evidence says the certificate is revoked.
+  revoked,
+
+  /// Evidence was parsed but is not authoritative for the certificate.
+  unknown,
+
+  /// No usable responder response was obtained.
+  inaccessible,
+
+  /// The response or responder authorization failed validation.
+  malformed,
+}
+
+/// Machine-readable OCSP verification issue codes.
 enum OcspIssueCode {
+  /// The configured transport failed to return a response.
   responseUnavailable,
+
+  /// The DER OCSP request exceeded the configured request byte limit.
   requestTooLarge,
+
+  /// The DER OCSP response exceeded the configured response byte limit.
   responseTooLarge,
+
+  /// The responder returned a non-successful OCSPResponseStatus.
   unsuccessfulResponse,
+
+  /// The OCSP response could not be parsed as supported RFC 6960 DER.
   malformedResponse,
+
+  /// The response did not uniquely cover the target certificate and issuer.
   targetCertificateMismatch,
+
+  /// The response nonce was missing or did not match the request nonce.
   nonceMismatch,
+
+  /// The SingleResponse freshness window does not cover evaluation time.
   staleResponse,
+
+  /// No embedded or issuer certificate matched the responder identifier.
   responderCertificateNotFound,
+
+  /// The delegated responder was not authorized by the target issuer.
   unauthorizedResponder,
+
+  /// The BasicOCSPResponse signature was malformed or invalid.
   invalidSignature,
+
+  /// The responder certificate chain did not validate to the trust policy.
   untrustedResponder,
+
+  /// A required hash or signature algorithm is unsupported.
   unsupportedAlgorithm,
 }
 
+/// One OCSP verification issue with a stable code and message.
 final class OcspIssue {
+  /// Creates an OCSP issue with [code] and human-readable [message].
   const OcspIssue(this.code, this.message);
 
+  /// The machine-readable category of the verification issue.
   final OcspIssueCode code;
+
+  /// A human-readable description of the verification issue.
   final String message;
 }
 
 /// Structured OCSP verification outcome.
 final class OcspVerificationResult {
+  /// Creates an OCSP verification result with immutable [issues].
   OcspVerificationResult({
     required this.status,
     required List<OcspIssue> issues,
@@ -253,17 +424,34 @@ final class OcspVerificationResult {
     this.pathResult,
   }) : issues = List.unmodifiable(issues);
 
+  /// The high-level status computed from parsed evidence and trust checks.
   final OcspResultStatus status;
+
+  /// Immutable issues collected while verifying the response.
   final List<OcspIssue> issues;
+
+  /// The parsed OCSP response, or `null` when parsing failed.
   final OcspResponse? response;
+
+  /// The unique SingleResponse for the target certificate, or `null`.
   final OcspSingleResponse? singleResponse;
+
+  /// The certificate selected to verify the BasicOCSPResponse signature.
   final X509Certificate? responderCertificate;
+
+  /// The responder path validation result, or `null` before path checks run.
   final CertificatePathValidationResult? pathResult;
 
+  /// Whether [status] is exactly `OcspResultStatus.good`.
   bool get isGood => status == OcspResultStatus.good;
 }
 
 /// Creates an unsigned DER OCSPRequest for one certificate.
+///
+/// Implements the single-request form from RFC 6960 and adds a nonce
+/// extension when [nonce] is supplied. This function performs no network I/O.
+/// Throws an [ArgumentError] if [nonce] is empty, contains non-byte values,
+/// or exceeds 32 bytes.
 Future<Uint8List> createOcspRequest({
   required X509Certificate certificate,
   required X509Certificate issuer,
@@ -292,6 +480,10 @@ Future<Uint8List> createOcspRequest({
 }
 
 /// Fetches and verifies OCSP using a caller-provided transport.
+///
+/// Performs network I/O only through [transport]. Size-limit failures and
+/// transport errors return `OcspResultStatus.inaccessible` instead of throwing.
+/// Throws an [ArgumentError] if either configured byte limit is less than 1.
 Future<OcspVerificationResult> fetchAndVerifyOcsp({
   required Uri endpoint,
   required X509Certificate certificate,
@@ -364,6 +556,11 @@ Future<OcspVerificationResult> fetchAndVerifyOcsp({
 }
 
 /// Verifies a BasicOCSPResponse for [certificate] issued by [issuer].
+///
+/// Parses RFC 6960 DER, checks a matching CertID, optional nonce,
+/// thisUpdate/nextUpdate freshness, responder authorization, signature, and
+/// certificate path. This function performs no network I/O. Throws an
+/// [ArgumentError] if freshness durations are negative.
 Future<OcspVerificationResult> verifyOcspResponse(
   List<int> responseDer, {
   required X509Certificate certificate,

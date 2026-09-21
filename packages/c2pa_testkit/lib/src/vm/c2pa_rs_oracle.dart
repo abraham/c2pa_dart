@@ -9,7 +9,14 @@ const _assetPlaceholder = '{asset}';
 const _jsonPlaceholder = '{json}';
 const _crJsonPlaceholder = '{crjson}';
 
+/// A VM-only command line for invoking a pinned c2pa-rs oracle binary.
+///
+/// The executable is supplied by the caller; use an absolute path or a name
+/// resolvable on `PATH` for the current VM process.
 final class C2paRsOracleCommand {
+  /// Creates an oracle command with immutable arguments and environment.
+  ///
+  /// Throws [ArgumentError] when [executable] or [pinnedVersion] is blank.
   C2paRsOracleCommand({
     required this.executable,
     required Iterable<String> arguments,
@@ -22,13 +29,26 @@ final class C2paRsOracleCommand {
     }
   }
 
+  /// The c2patool or c2pa-rs executable passed to `Process.start`.
   final String executable;
+
+  /// Command arguments, optionally containing oracle file placeholders.
+  ///
+  /// The oracle replaces `{asset}`, `{json}`, and `{crjson}` before launch.
   final List<String> arguments;
+
+  /// Human-readable version label recorded with every oracle result.
   final String pinnedVersion;
+
+  /// Extra environment variables for the subprocess.
+  ///
+  /// Parent environment variables are still included by the oracle runner.
   final Map<String, String> environment;
 }
 
+/// Captured output from one VM-only c2pa-rs oracle invocation.
 final class C2paRsOracleResult {
+  /// Creates an immutable oracle result for a completed subprocess.
   const C2paRsOracleResult({
     required this.commandVersion,
     required this.exitCode,
@@ -40,36 +60,61 @@ final class C2paRsOracleResult {
     required this.stderr,
   });
 
+  /// Version label copied from the pinned oracle command.
   final String commandVersion;
+
+  /// Subprocess exit code, including nonzero codes that still wrote JSON.
   final int exitCode;
+
+  /// Decoded JSON report emitted by the oracle.
   final Object? json;
+
+  /// Decoded crJSON report, or `null` when no crJSON file was emitted.
   final Object? crJson;
+
+  /// Raw JSON report text used for diagnostics and golden updates.
   final String jsonText;
+
+  /// Raw crJSON report text, or `null` when the oracle did not write one.
   final String? crJsonText;
+
+  /// UTF-8 stdout captured from the subprocess.
   final String stdout;
+
+  /// UTF-8 stderr captured from the subprocess.
   final String stderr;
 }
 
+/// Base class for VM-only oracle subprocess failures.
 sealed class C2paRsOracleException implements Exception {
+  /// Creates an oracle exception with a diagnostic [message].
   const C2paRsOracleException(this.message);
 
+  /// Human-readable explanation suitable for failed conformance tests.
   final String message;
 
+  /// Formats the exception type and [message] for test failure output.
   @override
   String toString() => '$runtimeType: $message';
 }
 
+/// A timeout while waiting for the VM-only oracle subprocess.
 final class C2paRsOracleTimeoutException extends C2paRsOracleException {
+  /// Creates a timeout failure for the configured [timeout].
   const C2paRsOracleTimeoutException(Duration timeout)
     : super('Oracle process exceeded timeout of $timeout.');
 }
 
+/// An oracle failure caused by stdout, stderr, or report size limits.
 final class C2paRsOracleOutputException extends C2paRsOracleException {
+  /// Creates an output-limit failure for [limit] bytes.
   const C2paRsOracleOutputException(int limit)
     : super('Oracle output exceeded the $limit byte limit.');
 }
 
+/// An oracle failure caused by non-UTF-8 or malformed JSON output.
 final class C2paRsOracleFormatException extends C2paRsOracleException {
+  /// Creates a format failure with a parser diagnostic [message].
   const C2paRsOracleFormatException(super.message);
 }
 
@@ -78,7 +123,14 @@ final class C2paRsOracleFormatException extends C2paRsOracleException {
 /// Arguments may contain `{asset}`, `{json}`, and `{crjson}` placeholders.
 /// The adapter writes all transient files beneath caller-owned
 /// [scratchDirectory] and removes each invocation directory after completion.
+///
+/// This helper is VM-only, shells out to c2patool or a c2pa-rs test binary,
+/// and is not safe for web tests. Missing binaries surface from
+/// `Process.start`, typically as a [ProcessException].
 final class C2paRsOracle {
+  /// Creates a VM-only oracle runner with bounded runtime and output.
+  ///
+  /// [scratchDirectory] must be absolute and is created as needed.
   C2paRsOracle({
     required this.command,
     required Directory scratchDirectory,
@@ -104,13 +156,26 @@ final class C2paRsOracle {
     }
   }
 
+  /// The external c2patool or c2pa-rs command to run for each asset.
   final C2paRsOracleCommand command;
+
+  /// Absolute directory used for per-invocation asset and report files.
   final Directory scratchDirectory;
+
+  /// Maximum wall-clock time allowed for one oracle subprocess.
   final Duration timeout;
+
+  /// Combined byte limit for stdout, stderr, JSON, and crJSON output.
   final int maxOutputBytes;
 
   static int _runSequence = 0;
 
+  /// Inspects [asset] by writing it to disk and launching the oracle command.
+  ///
+  /// Throws [C2paRsOracleTimeoutException] on timeout,
+  /// [C2paRsOracleOutputException] when output exceeds [maxOutputBytes],
+  /// [C2paRsOracleFormatException] for invalid text or JSON, and
+  /// [ProcessException] when the executable cannot be started.
   Future<C2paRsOracleResult> inspect(FixtureAsset asset) async {
     await scratchDirectory.create(recursive: true);
     final runDirectory = Directory.fromUri(

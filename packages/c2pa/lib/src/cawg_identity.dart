@@ -13,11 +13,20 @@ import 'json_utils.dart';
 import 'remote_manifest.dart';
 import 'signing.dart';
 
+/// CAWG assertion labels and helpers for identity assertions.
 abstract final class CawgIdentityLabels {
+  /// Base label for a CAWG identity assertion.
   static const identity = 'cawg.identity';
+
+  /// Signature type for X.509 COSE identity assertions.
   static const x509Cose = 'cawg.x509.cose';
+
+  /// Signature type for identity-claims aggregation credentials.
   static const identityClaimsAggregation = 'cawg.identity_claims_aggregation';
 
+  /// Builds the identity assertion label for a zero-based instance index.
+  ///
+  /// Throws ArgumentError when the index is negative.
   static String instance(int index) {
     if (index < 0) {
       throw ArgumentError.value(index, 'index', 'Must not be negative');
@@ -25,51 +34,132 @@ abstract final class CawgIdentityLabels {
     return index == 0 ? identity : '${identity}__$index';
   }
 
+  /// Checks whether a label is `cawg.identity` or a numbered instance.
   static bool isIdentity(String label) =>
       label == identity ||
       RegExp(r'^cawg\.identity__[1-9][0-9]*$').hasMatch(label);
 }
 
-enum CawgStatusSeverity { success, informational, failure }
+/// Severity level attached to a CAWG validation status.
+enum CawgStatusSeverity {
+  /// Successful validation condition.
+  success,
 
+  /// Non-failing informational validation condition.
+  informational,
+
+  /// Failing validation condition.
+  failure,
+}
+
+/// Status code constants emitted by CAWG identity validation.
 abstract final class CawgStatusCodes {
+  /// Status code for an identity assertion that is not valid CBOR.
   static const cborInvalid = 'cawg.identity.cbor.invalid';
+
+  /// Status code for non-zero CAWG identity padding bytes.
   static const padInvalid = 'cawg.identity.pad.invalid';
+
+  /// Status code for a referenced assertion hash mismatch.
   static const assertionMismatch = 'cawg.identity.assertion.mismatch';
+
+  /// Status code for duplicate assertion references in signer payload.
   static const assertionDuplicate = 'cawg.identity.assertion.duplicate';
+
+  /// Status code for identity assertions without a hard-binding reference.
   static const hardBindingMissing = 'cawg.identity.hard_binding_missing';
+
+  /// Status code for cycles among referenced identity assertions.
   static const assertionCycle = 'cawg.identity.assertion.cycle';
+
+  /// Status code for an unsupported CAWG signature type.
   static const signatureTypeUnknown = 'cawg.identity.sig_type.unknown';
+
+  /// Status code for a failed CAWG X.509 COSE signature check.
   static const signatureInvalid = 'cawg.identity.signature.invalid';
+
+  /// Status code for an untrusted CAWG signing certificate.
   static const certificateUntrusted = 'cawg.identity.credential.untrusted';
+
+  /// Status code for malformed or unusable CAWG certificate data.
   static const certificateInvalid = 'cawg.identity.credential.invalid';
+
+  /// Status code for a revoked CAWG signing certificate.
   static const certificateRevoked = 'cawg.identity.credential.revoked';
+
+  /// Status code for a positive OCSP not-revoked result.
   static const certificateNotRevoked = 'cawg.identity.credential.not_revoked';
+
+  /// Status code for missing or inconclusive OCSP revocation data.
   static const ocspUnknown = 'cawg.identity.credential.ocsp_unknown';
+
+  /// Status code for malformed CAWG X.509 timestamp data.
   static const timestampMalformed = 'cawg.identity.timestamp.malformed';
+
+  /// Status code for an untrusted CAWG X.509 timestamp token.
   static const timestampUntrusted = 'cawg.identity.timestamp.untrusted';
+
+  /// Status code for a structurally well-formed identity assertion.
   static const wellFormed = 'cawg.identity.well-formed';
+
+  /// Status code for a trusted CAWG identity assertion.
   static const trusted = 'cawg.identity.trusted';
+
+  /// Compatibility status for a trusted signing credential.
   static const signingCredentialTrusted = 'signingCredential.trusted';
+
+  /// Compatibility status for an untrusted signing credential.
   static const signingCredentialUntrusted = 'signingCredential.untrusted';
+
+  /// Status code for invalid ICA COSE_Sign1 structure.
   static const icaInvalidCose = 'cawg.ica.invalid_cose_sign1';
+
+  /// Status code for missing or unsupported ICA COSE algorithm.
   static const icaInvalidAlgorithm = 'cawg.ica.invalid_alg';
+
+  /// Status code for ICA COSE content type other than `application/vc`.
   static const icaInvalidContentType = 'cawg.ica.invalid_content_type';
+
+  /// Status code for malformed ICA verifiable credential content.
   static const icaInvalidCredential = 'cawg.ica.invalid_verifiable_credential';
+
+  /// Status code for ICA credential `c2paAsset` payload mismatch.
   static const icaAssetMismatch = 'cawg.ica.signer_payload.mismatch';
+
+  /// Status code for an unsupported ICA issuer DID method.
   static const icaIssuerUnsupported = 'cawg.ica.invalid_issuer';
+
+  /// Status code for did:web resolution failure.
   static const icaDidResolutionFailed = 'cawg.ica.did_unavailable';
+
+  /// Status code for a malformed or unauthorized DID document.
   static const icaInvalidDidDocument = 'cawg.ica.invalid_did_document';
+
+  /// Status code for an ICA credential signature mismatch.
   static const icaSignatureMismatch = 'cawg.ica.signature_mismatch';
+
+  /// Status code for a valid ICA timestamp token.
   static const icaTimestampValidated = 'cawg.ica.time_stamp.validated';
+
+  /// Status code for an invalid ICA timestamp token.
   static const icaTimestampInvalid = 'cawg.ica.time_stamp.invalid';
+
+  /// Status code for a missing ICA validity start timestamp.
   static const icaValidFromMissing = 'cawg.ica.valid_from.missing';
+
+  /// Status code for an ICA credential not yet valid.
   static const icaValidFromInvalid = 'cawg.ica.valid_from.invalid';
+
+  /// Status code for an expired ICA credential.
   static const icaValidUntilInvalid = 'cawg.ica.valid_until.invalid';
+
+  /// Status code for a valid ICA credential profile and signature.
   static const icaCredentialValid = 'cawg.ica.credential_valid';
 }
 
+/// Single validation status emitted during CAWG identity checking.
 final class CawgValidationStatus {
+  /// Creates a validation status with optional URL and explanation.
   const CawgValidationStatus({
     required this.code,
     required this.severity,
@@ -77,11 +167,19 @@ final class CawgValidationStatus {
     this.explanation,
   });
 
+  /// Machine-readable validation code, usually from CawgStatusCodes.
   final String code;
+
+  /// Severity that determines whether the status is a failure.
   final CawgStatusSeverity severity;
+
+  /// Optional assertion URL or label related to this status.
   final String? url;
+
+  /// Optional human-readable detail for diagnostics.
   final String? explanation;
 
+  /// Encodes this value as a JSON-compatible map.
   Map<String, Object?> toJson() => {
     'code': code,
     'severity': severity.name,
@@ -101,7 +199,9 @@ final class CawgValidationStatus {
   int get hashCode => Object.hash(code, severity, url, explanation);
 }
 
+/// Result of validating one CAWG identity assertion.
 final class CawgIdentityValidationResult {
+  /// Creates a validation result with immutable status records.
   CawgIdentityValidationResult({
     required this.assertionLabel,
     required Iterable<CawgValidationStatus> statuses,
@@ -112,14 +212,24 @@ final class CawgIdentityValidationResult {
            ? null
            : freezeJsonMap(credentialSummary);
 
+  /// Manifest label of the identity assertion that was validated.
   final String assertionLabel;
+
+  /// Validation statuses emitted in evaluation order.
   final List<CawgValidationStatus> statuses;
+
+  /// Decoded signer payload, or null when it could not be decoded.
   final CawgSignerPayload? signerPayload;
+
+  /// Optional JSON summary of the verified credential or certificate.
   final Map<String, Object?>? credentialSummary;
 
+  /// Whether validation produced `cawg.identity.well-formed` and no failures.
   bool get isWellFormed =>
       statuses.any((status) => status.code == CawgStatusCodes.wellFormed) &&
       !statuses.any((status) => status.severity == CawgStatusSeverity.failure);
+
+  /// Whether validation produced a trusted status and no failures.
   bool get isTrusted =>
       statuses.any(
         (status) =>
@@ -128,6 +238,7 @@ final class CawgIdentityValidationResult {
       ) &&
       !statuses.any((status) => status.severity == CawgStatusSeverity.failure);
 
+  /// Encodes this value as a JSON-compatible map.
   Map<String, Object?> toJson() => {
     'assertionLabel': assertionLabel,
     'statuses': statuses.map((status) => status.toJson()).toList(),
@@ -136,7 +247,11 @@ final class CawgIdentityValidationResult {
   };
 }
 
+/// Decoded CAWG `signer_payload` map used as signature input.
 final class CawgSignerPayload {
+  /// Creates a signer payload from referenced assertions and signature type.
+  ///
+  /// Throws FormatException when the signature type or any role is empty.
   factory CawgSignerPayload({
     required Iterable<ClaimHashedUri> referencedAssertions,
     required String signatureType,
@@ -180,6 +295,7 @@ final class CawgSignerPayload {
     }
   }
 
+  /// Parses a CAWG `signer_payload` CBOR map.
   factory CawgSignerPayload.fromCbor(Object? value) {
     final map = _stringMap(value, 'CAWG signer_payload');
     final refs = map['referenced_assertions'];
@@ -227,12 +343,23 @@ final class CawgSignerPayload {
     );
   }
 
+  /// Assertions covered by the identity signature.
   final List<ClaimHashedUri> referencedAssertions;
+
+  /// CAWG signature type such as `cawg.x509.cose`.
   final String signatureType;
+
+  /// Optional non-empty roles associated with the signer.
   final List<String> roles;
   final _CawgRoleEncoding _roleEncoding;
+
+  /// Legacy single role value, or null when zero or multiple roles exist.
   String? get role => roles.length == 1 ? roles.single : null;
+
+  /// Fields whose keys start with `expected_` in the signer payload.
   final Map<String, Object?> expected;
+
+  /// Extension fields preserved from decoding and re-emitted unchanged.
   final Map<String, Object?> unknownFields;
   final Uint8List? _rawBytes;
 
@@ -246,6 +373,7 @@ final class CawgSignerPayload {
     rawBytes: bytes,
   );
 
+  /// Encodes the signer payload as the CBOR map used for signing.
   Map<String, Object?> toCborMap() => {
     ...unknownFields,
     ...expected,
@@ -259,10 +387,12 @@ final class CawgSignerPayload {
           : roles,
   };
 
+  /// Encodes the signer payload to CBOR, preserving original bytes when known.
   Uint8List encode() => _rawBytes == null
       ? encodeCbor(toCborMap())
       : Uint8List.fromList(_rawBytes);
 
+  /// Encodes the signer payload as JSON with byte strings base64 encoded.
   Map<String, Object?> toJson() =>
       _bytesToBase64(toCborMap()) as Map<String, Object?>;
 
@@ -287,7 +417,11 @@ final class CawgSignerPayload {
 
 enum _CawgRoleEncoding { absent, legacyString, list }
 
+/// CAWG identity assertion containing signer payload, signature, and padding.
 final class CawgIdentityAssertion {
+  /// Creates a CAWG identity assertion from its CBOR fields.
+  ///
+  /// Throws FormatException when the signature byte string is empty.
   CawgIdentityAssertion({
     required this.signerPayload,
     required Uint8List signature,
@@ -309,6 +443,7 @@ final class CawgIdentityAssertion {
     }
   }
 
+  /// Parses a CAWG identity assertion from a decoded CBOR map.
   factory CawgIdentityAssertion.fromCbor(Object? value) {
     final map = _stringMap(value, 'CAWG identity assertion');
     final signerPayload = map['signer_payload'];
@@ -336,6 +471,7 @@ final class CawgIdentityAssertion {
     );
   }
 
+  /// Decodes a CAWG identity assertion from raw CBOR bytes.
   factory CawgIdentityAssertion.decode(Uint8List bytes) {
     final decoded = CawgIdentityAssertion.fromCbor(
       decodeCbor(
@@ -355,13 +491,23 @@ final class CawgIdentityAssertion {
     );
   }
 
+  /// Payload signed by the CAWG identity signature.
   final CawgSignerPayload signerPayload;
+
+  /// Signature bytes from the CAWG identity assertion.
   final Uint8List signature;
+
+  /// First padding byte string, required to contain only zeros.
   final Uint8List pad1;
+
+  /// Optional second padding byte string, also required to contain zeros.
   final Uint8List? pad2;
+
+  /// Extension fields preserved from decoding and re-emitted unchanged.
   final Map<String, Object?> unknownFields;
   final Uint8List? _rawBytes;
 
+  /// Encodes the identity assertion as the CBOR map stored in the manifest.
   Map<String, Object?> toCborMap() => {
     ...unknownFields,
     'signer_payload': signerPayload.toCborMap(),
@@ -370,10 +516,12 @@ final class CawgIdentityAssertion {
     'pad2': ?(pad2 == null ? null : Uint8List.fromList(pad2!)),
   };
 
+  /// Encodes the identity assertion to CBOR, preserving original bytes.
   Uint8List encode() => _rawBytes == null
       ? encodeCbor(toCborMap())
       : Uint8List.fromList(_rawBytes);
 
+  /// Whether all present padding bytes are zero.
   bool get hasValidPadding =>
       pad1.every((value) => value == 0) &&
       (pad2?.every((value) => value == 0) ?? true);
@@ -397,9 +545,15 @@ final class CawgIdentityAssertion {
   );
 }
 
+/// Validator for CAWG identity assertions referenced by a claim.
 final class CawgIdentityValidator {
+  /// Creates a stateless CAWG identity validator.
   const CawgIdentityValidator();
 
+  /// Validates identity references, hard binding, and signature trust.
+  ///
+  /// Performs certificate, OCSP, timestamp, or ICA checks according to the
+  /// signature type and validation context.
   Future<CawgIdentityValidationResult> validate({
     required String assertionLabel,
     required CawgIdentityAssertion assertion,
@@ -554,16 +708,24 @@ final class CawgIdentityValidator {
   );
 }
 
+/// Internal-style result returned by CAWG signature verifiers.
 final class CawgX509Verification {
+  /// Creates a verifier result with statuses and optional credential summary.
   CawgX509Verification(this.statuses, this.credentialSummary);
 
+  /// Validation statuses emitted in evaluation order.
   final List<CawgValidationStatus> statuses;
+
+  /// Optional JSON summary of the verified credential or certificate.
   final Map<String, Object?>? credentialSummary;
 }
 
+/// Verifier for `cawg.x509.cose` identity signatures.
 final class CawgX509CoseVerifier {
+  /// Creates a stateless X.509 COSE verifier.
   const CawgX509CoseVerifier();
 
+  /// Verifies a CAWG X.509 COSE signature and related trust evidence.
   Future<CawgX509Verification> verify(
     CawgIdentityAssertion assertion,
     C2paContext context,
@@ -777,7 +939,12 @@ final class CawgX509CoseVerifier {
   }
 }
 
+/// Signing material used to generate X.509 COSE identity assertions.
 final class CawgX509CredentialHolder {
+  /// Creates an X.509 credential holder for dynamic identity signing.
+  ///
+  /// Throws ArgumentError when the chain is empty or reservation size is not
+  /// positive.
   CawgX509CredentialHolder({
     required this.signer,
     required Iterable<Uint8List> certificateChain,
@@ -807,13 +974,25 @@ final class CawgX509CredentialHolder {
     }
   }
 
+  /// Signer callback used to produce COSE signatures.
   final C2paSigner signer;
+
+  /// Certificate chain placed in the COSE `x5chain` header.
   final List<Uint8List> certificateChain;
+
+  /// Exact byte size reserved for the generated identity assertion.
   final int reservedAssertionSize;
+
+  /// Optional signer role included in the generated signer payload.
   final String? role;
+
+  /// Fields whose keys start with `expected_` in the signer payload.
   final Map<String, Object?> expected;
+
+  /// Optional callback that supplies a timestamp token for `sigTst2`.
   final CawgTimestampCallback? timestamp;
 
+  /// Builds a dynamic assertion that signs the claim at generation time.
   C2paDynamicAssertion toDynamicAssertion({int instance = 0}) {
     final label = CawgIdentityLabels.instance(instance);
     return C2paDynamicAssertion(
@@ -867,16 +1046,20 @@ final class CawgX509CredentialHolder {
   }
 }
 
+/// Callback that timestamps CAWG COSE counter-signature bytes.
 typedef CawgTimestampCallback = Future<Uint8List> Function(
   Uint8List counterSignatureBytes,
 );
 
+/// Convenience methods for adding CAWG identity assertions to a builder.
 extension CawgBuilderExtension on C2paBuilder {
+  /// Adds an X.509 COSE CAWG identity dynamic assertion.
   C2paBuilder withCawgX509Identity(
     CawgX509CredentialHolder holder, {
     int instance = 0,
   }) => withDynamicAssertion(holder.toDynamicAssertion(instance: instance));
 
+  /// Adds an identity-claims aggregation dynamic assertion.
   C2paBuilder withCawgIdentityClaims(
     CawgIcaCredentialHolder holder, {
     int instance = 0,
@@ -899,11 +1082,17 @@ Uint8List _withSigTst2(Uint8List cose, Uint8List timestampToken) {
   return tagged ? Uint8List.fromList([0xd2, ...encoded]) : encoded;
 }
 
+/// Factory that creates an ICA credential from the signer payload.
 typedef CawgIcaCredentialFactory = CawgIdentityClaimsCredential Function(
   CawgSignerPayload signerPayload,
 );
 
+/// Signing material used to generate ICA identity assertions.
 final class CawgIcaCredentialHolder {
+  /// Creates an ICA credential holder for dynamic identity signing.
+  ///
+  /// Throws ArgumentError unless the signer uses Ed25519 or the reservation
+  /// size is positive.
   CawgIcaCredentialHolder({
     required this.signer,
     required this.credentialFactory,
@@ -928,13 +1117,25 @@ final class CawgIcaCredentialHolder {
     }
   }
 
+  /// Signer callback used to produce COSE signatures.
   final C2paSigner signer;
+
+  /// Factory that must produce a credential matching the signer payload.
   final CawgIcaCredentialFactory credentialFactory;
+
+  /// Exact byte size reserved for the generated identity assertion.
   final int reservedAssertionSize;
+
+  /// Optional COSE key identifier encoded as UTF-8 in the protected header.
   final String? keyId;
+
+  /// Optional signer role included in the generated signer payload.
   final String? role;
+
+  /// Fields whose keys start with `expected_` in the signer payload.
   final Map<String, Object?> expected;
 
+  /// Builds a dynamic assertion that signs the claim at generation time.
   C2paDynamicAssertion toDynamicAssertion({int instance = 0}) {
     final label = CawgIdentityLabels.instance(instance);
     return C2paDynamicAssertion(
@@ -987,10 +1188,13 @@ final class CawgIcaCredentialHolder {
   }
 }
 
+/// Issuer value from a CAWG identity-claims credential.
 final class CawgIssuer {
+  /// Creates an issuer with optional JSON object fields.
   CawgIssuer({required this.id, Map<String, Object?> fields = const {}})
     : fields = freezeJsonMap(fields);
 
+  /// Parses a credential issuer from a string or JSON object.
   factory CawgIssuer.fromJson(Object? value) {
     if (value is String) return CawgIssuer(id: value);
     final map = _stringMap(value, 'VC issuer');
@@ -1001,9 +1205,13 @@ final class CawgIssuer {
     return CawgIssuer(id: id, fields: unknownFieldsOf(map, const {'id'}));
   }
 
+  /// Issuer identifier string, commonly a DID.
   final String id;
+
+  /// Additional issuer object fields preserved for JSON output.
   final Map<String, Object?> fields;
 
+  /// Encodes the issuer as either a string or JSON object.
   Object toJson() => fields.isEmpty ? id : {...fields, 'id': id};
 
   @override
@@ -1014,7 +1222,11 @@ final class CawgIssuer {
   int get hashCode => Object.hash(id, deepHash(fields));
 }
 
+/// Verified identity provider entry in an ICA credential.
 final class CawgIdentityProvider {
+  /// Creates a verified identity provider.
+  ///
+  /// Throws FormatException when the URI or provider name is empty.
   CawgIdentityProvider({
     required this.id,
     required this.name,
@@ -1025,6 +1237,7 @@ final class CawgIdentityProvider {
     }
   }
 
+  /// Parses a verified identity provider from JSON.
   factory CawgIdentityProvider.fromJson(Object? value) {
     final map = _stringMap(value, 'verified identity provider');
     final id = map['id'];
@@ -1040,10 +1253,16 @@ final class CawgIdentityProvider {
     );
   }
 
+  /// Provider identifier URI.
   final Uri id;
+
+  /// Human-readable provider name; must be non-empty.
   final String name;
+
+  /// Extension fields preserved from decoding and re-emitted unchanged.
   final Map<String, Object?> unknownFields;
 
+  /// Encodes this value as a JSON-compatible map.
   Map<String, Object?> toJson() => {
     ...unknownFields,
     'id': id.toString(),
@@ -1061,7 +1280,12 @@ final class CawgIdentityProvider {
   int get hashCode => Object.hash(id, name, deepHash(unknownFields));
 }
 
+/// Verified identity claim embedded in an ICA credential.
 final class CawgVerifiedIdentity {
+  /// Creates a verified identity claim.
+  ///
+  /// Throws FormatException when required or supplied identity strings are
+  /// empty.
   CawgVerifiedIdentity({
     required this.type,
     required DateTime verifiedAt,
@@ -1081,6 +1305,7 @@ final class CawgVerifiedIdentity {
     }
   }
 
+  /// Parses a verified identity claim from JSON.
   factory CawgVerifiedIdentity.fromJson(Object? value) {
     final map = _stringMap(value, 'verified identity');
     final type = map['type'];
@@ -1113,15 +1338,31 @@ final class CawgVerifiedIdentity {
     );
   }
 
+  /// Identity category such as a person, organization, or account.
   final String type;
+
+  /// Optional display name for the verified identity.
   final String? name;
+
+  /// Optional username or handle for the verified identity.
   final String? username;
+
+  /// Optional address string for the verified identity.
   final String? address;
+
+  /// Optional URI associated with the verified identity.
   final Uri? uri;
+
+  /// UTC timestamp when the provider verified the identity.
   final DateTime verifiedAt;
+
+  /// Provider that verified this identity.
   final CawgIdentityProvider provider;
+
+  /// Extension fields preserved from decoding and re-emitted unchanged.
   final Map<String, Object?> unknownFields;
 
+  /// Encodes this value as a JSON-compatible map.
   Map<String, Object?> toJson() => {
     ...unknownFields,
     'type': type,
@@ -1158,7 +1399,11 @@ final class CawgVerifiedIdentity {
   );
 }
 
+/// Identity Claims Aggregation verifiable credential.
 final class CawgIdentityClaimsCredential {
+  /// Creates an ICA credential from VC fields and credentialSubject data.
+  ///
+  /// Throws FormatException when no verified identities are supplied.
   CawgIdentityClaimsCredential({
     required Iterable<String> context,
     required Iterable<String> types,
@@ -1189,6 +1434,7 @@ final class CawgIdentityClaimsCredential {
     }
   }
 
+  /// Parses an ICA credential from a decoded JSON value.
   factory CawgIdentityClaimsCredential.fromJson(Object? value) {
     final map = _stringMap(value, 'ICA credential');
     final context = _strings(map['@context'], '@context');
@@ -1229,6 +1475,7 @@ final class CawgIdentityClaimsCredential {
     );
   }
 
+  /// Decodes an ICA credential from UTF-8 JSON bytes.
   factory CawgIdentityClaimsCredential.decode(Uint8List bytes) {
     final value = jsonDecode(utf8.decode(bytes));
     final parsed = CawgIdentityClaimsCredential.fromJson(value);
@@ -1249,27 +1496,55 @@ final class CawgIdentityClaimsCredential {
     );
   }
 
+  /// Verifiable Credential context values from `@context`.
   final List<String> context;
+
+  /// Credential type values from `type`.
   final List<String> types;
+
+  /// Credential issuer.
   final CawgIssuer issuer;
+
+  /// Non-empty verified identities in `credentialSubject`.
   final List<CawgVerifiedIdentity> verifiedIdentities;
+
+  /// Signer-payload JSON stored in `credentialSubject.c2paAsset`.
   final Map<String, Object?> c2paAsset;
+
+  /// Optional credential identifier.
   final String? id;
+
+  /// Optional UTC instant when the credential becomes valid.
   final DateTime? validFrom;
+
+  /// Optional UTC instant when the credential stops being valid.
   final DateTime? validUntil;
+
+  /// Optional VC 1.1 issuance timestamp.
   final DateTime? issuanceDate;
+
+  /// Optional VC 1.1 expiration timestamp.
   final DateTime? expirationDate;
+
+  /// Extension fields preserved from decoding and re-emitted unchanged.
   final Map<String, Object?> unknownFields;
+
+  /// Additional `credentialSubject` fields preserved for JSON output.
   final Map<String, Object?> subjectUnknownFields;
   final Uint8List? _rawJsonBytes;
 
+  /// Original credential JSON bytes, or null when constructed from fields.
   Uint8List? get rawJsonBytes => _rawJsonBytes == null
       ? null
       : Uint8List.fromList(_rawJsonBytes).asUnmodifiableView();
 
+  /// Whether the credential declares the VC 1.1 context.
   bool get isVc11 => context.contains('https://www.w3.org/2018/credentials/v1');
+
+  /// Whether the credential declares the VC 2.0 context.
   bool get isVc20 => context.contains('https://www.w3.org/ns/credentials/v2');
 
+  /// Encodes this value as a JSON-compatible map.
   Map<String, Object?> toJson() => {
     ...unknownFields,
     '@context': context,
@@ -1289,6 +1564,7 @@ final class CawgIdentityClaimsCredential {
     },
   };
 
+  /// Encodes the credential to UTF-8 JSON, preserving original bytes.
   Uint8List encodeJson() => _rawJsonBytes == null
       ? Uint8List.fromList(utf8.encode(jsonEncode(toJson())))
       : Uint8List.fromList(_rawJsonBytes);
@@ -1326,11 +1602,15 @@ final class CawgIdentityClaimsCredential {
   );
 }
 
+/// Verifier for CAWG identity-claims aggregation credentials.
 final class CawgIcaVerifier {
+  /// Creates an ICA verifier using the selected compatibility profile.
   const CawgIcaVerifier({this.compatibility = CawgIcaCompatibility.stable11});
 
+  /// Compatibility profile that controls ICA validation edge cases.
   final CawgIcaCompatibility compatibility;
 
+  /// Verifies a CAWG X.509 COSE signature and related trust evidence.
   Future<CawgX509Verification> verify(
     CawgIdentityAssertion assertion,
     C2paContext context,
@@ -1827,6 +2107,8 @@ CawgIdentityAssertion _fitIdentityAssertion({
 
 final class _CallbackSigningBackend implements CoseSigningBackend {
   const _CallbackSigningBackend(this.signer);
+
+  /// Signer callback used to produce COSE signatures.
   final C2paSigner signer;
 
   @override
@@ -2313,6 +2595,7 @@ Map<String, Object?> _stringMap(Object? value, String name) {
   return result;
 }
 
+/// Collects entries whose keys are not part of the known field set.
 Map<String, Object?> unknownFieldsOf(
   Map<String, Object?> map,
   Set<String> known,

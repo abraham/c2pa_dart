@@ -7,15 +7,27 @@ import 'package:c2pa_crypto/c2pa_crypto.dart';
 import '../conformance.dart';
 import 'golden_json.dart';
 
+/// Loads a VM-only conformance fixture index from [path].
+///
+/// Relative paths are resolved through the `c2pa_testkit` package; this uses
+/// `dart:io` and isolate package resolution, so it is not web-safe.
 Future<ConformanceFixtureIndex> loadConformanceFixtureIndex(String path) async {
   final json = await loadGoldenJsonObject(path);
   return ConformanceFixtureIndex.fromJson(json);
 }
 
+/// Loads a VM-only fixture manifest alias from [path].
+///
+/// This exists for tests that use manifest terminology and delegates to
+/// [loadConformanceFixtureIndex].
 Future<ConformanceFixtureIndex> loadConformanceFixtureManifest(String path) =>
     loadConformanceFixtureIndex(path);
 
 /// Loads a fixture relative to its index and verifies declared size and SHA-256.
+///
+/// This VM-only helper reads bytes with `dart:io`. It throws
+/// [FormatException] when `metadata.size` or `metadata.sha256` is declared
+/// and does not match the bytes on disk.
 Future<Uint8List> loadConformanceFixtureAsset(
   String indexPath,
   ConformanceFixture fixture,

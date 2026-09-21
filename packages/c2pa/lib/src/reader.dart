@@ -38,7 +38,14 @@ Object? _decodeManifestCbor(List<int> bytes, {int maxNestingDepth = 64}) =>
       allowIndefiniteLength: true,
     );
 
+/// Raw JUMBF box bytes exposed from a C2PA manifest store.
+///
+/// This is public API for callers that need lossless access to boxes the typed
+/// reader does not decode.
 final class C2paRawBox {
+  /// Creates an immutable raw box view.
+  ///
+  /// [bytes] are copied defensively and include the full serialized box.
   C2paRawBox({
     required this.boxType,
     required Uint8List bytes,
@@ -46,13 +53,29 @@ final class C2paRawBox {
     this.label,
   }) : bytes = Uint8List.fromList(bytes).asUnmodifiableView();
 
+  /// Four-character BMFF box type.
   final String boxType;
+
+  /// JUMBF content-type UUID as hex, or `null` for non-super boxes.
   final String? contentType;
+
+  /// JUMBF label, or `null` when the box has no label.
   final String? label;
+
+  /// Full serialized box bytes, including the box header.
+  /// Stored manifest box bytes as embedded in the manifest store.
   final Uint8List bytes;
 }
 
+/// Parsed manifest entry and validation state from a C2PA manifest store.
+///
+/// This is public API for inspecting one manifest, including typed assertions,
+/// raw boxes, embedded resources, and validation issues.
 final class C2paManifestEntry {
+  /// Creates an immutable parsed manifest entry.
+  ///
+  /// Byte lists and iterable inputs are copied defensively. [logicalBytes]
+  /// defaults to [bytes] when the manifest was not compressed.
   C2paManifestEntry({
     required this.label,
     required this.contentType,
@@ -94,10 +117,19 @@ final class C2paManifestEntry {
        ),
        resources = List<C2paResource>.unmodifiable(resources);
 
+  /// Manifest label used in `self#jumbf=/c2pa/...` references.
   final String label;
+
+  /// JUMBF content-type UUID identifying the manifest box kind.
   final String contentType;
+
+  /// Stored manifest box bytes as embedded in the manifest store.
   final Uint8List bytes;
+
+  /// Decompressed manifest box bytes used for parsing and validation.
   final Uint8List logicalBytes;
+
+  /// Compression state of the stored manifest entry.
   final C2paManifestCompression compression;
 
   /// Raw CBOR bytes of the claim box, as stored in the asset.
@@ -105,57 +137,106 @@ final class C2paManifestEntry {
   /// c2pa-rs keeps the equivalent as `Claim::original_bytes` and hashes it for
   /// the pre-1.3 ingredient reference form.
   final Uint8List? claimBytes;
+
+  /// Whether the stored manifest used Brotli compression.
   bool get isCompressed => compression == C2paManifestCompression.brotli;
+
+  /// Stored manifest size in bytes.
   int get storedSize => bytes.length;
+
+  /// Decompressed manifest size in bytes.
   int get logicalSize => logicalBytes.length;
+
+  /// Decoded claim, or `null` when the claim is missing or malformed.
   final Claim? claim;
+
+  /// Signature metadata, or `null` when no valid signature info exists.
   final SignatureInfo? signatureInfo;
+
+  /// Raw COSE signature payload bytes, or `null` when unavailable.
   final Uint8List? signatureBytes;
+
+  /// Raw assertion boxes from the manifest assertion store.
   final List<C2paRawBox> assertions;
+
+  /// Raw child boxes that are not recognized claim, signature, or store boxes.
   final List<C2paRawBox> unknownBoxes;
+
+  /// Manifest structure and syntax issues found while parsing.
   final List<ValidationIssue> structuralIssues;
+
+  /// Claim, assertion, hard-binding, and signature validation issues.
   final List<ValidationIssue> cryptographicIssues;
+
+  /// Typed ingredient assertions decoded from this manifest.
   final List<IngredientAssertion> ingredients;
+
+  /// Typed actions assertions decoded from this manifest.
   final List<ActionsAssertion> actions;
+
+  /// Typed standard assertions decoded from this manifest.
   final List<C2paStandardAssertion> standardAssertions;
+
+  /// CAWG identity validation results associated with this manifest.
   final List<CawgIdentityValidationResult> identityAssertions;
+
+  /// Embedded databox resources decoded from this manifest.
   final List<C2paResource> resources;
 
+  /// Standard C2PA metadata assertions decoded from [standardAssertions].
   List<C2paMetadataAssertion> get metadataAssertions =>
       List<C2paMetadataAssertion>.unmodifiable(
         standardAssertions.whereType<C2paMetadataAssertion>(),
       );
+
+  /// Assertion metadata entries decoded from [standardAssertions].
   List<C2paAssertionMetadata> get assertionMetadata =>
       List<C2paAssertionMetadata>.unmodifiable(
         standardAssertions.whereType<C2paAssertionMetadata>(),
       );
+
+  /// Soft-binding assertions decoded from [standardAssertions].
   List<C2paSoftBindingAssertion> get softBindings =>
       List<C2paSoftBindingAssertion>.unmodifiable(
         standardAssertions.whereType<C2paSoftBindingAssertion>(),
       );
+
+  /// Embedded data assertions decoded from [standardAssertions].
   List<C2paEmbeddedData> get embeddedData =>
       List<C2paEmbeddedData>.unmodifiable(
         standardAssertions.whereType<C2paEmbeddedData>(),
       );
+
+  /// Thumbnail assertions decoded from [standardAssertions].
   List<C2paThumbnail> get thumbnails => List<C2paThumbnail>.unmodifiable(
     standardAssertions.whereType<C2paThumbnail>(),
   );
+
+  /// Asset reference assertions decoded from [standardAssertions].
   List<C2paAssetReferenceAssertion> get assetReferences =>
       List<C2paAssetReferenceAssertion>.unmodifiable(
         standardAssertions.whereType<C2paAssetReferenceAssertion>(),
       );
+
+  /// Asset type assertions decoded from [standardAssertions].
   List<C2paAssetTypesAssertion> get assetTypes =>
       List<C2paAssetTypesAssertion>.unmodifiable(
         standardAssertions.whereType<C2paAssetTypesAssertion>(),
       );
+
+  /// Timestamp assertions decoded from [standardAssertions].
   List<C2paTimestampAssertion> get timestamps =>
       List<C2paTimestampAssertion>.unmodifiable(
         standardAssertions.whereType<C2paTimestampAssertion>(),
       );
+
+  /// Certificate status assertions decoded from [standardAssertions].
   List<C2paCertificateStatusAssertion> get certificateStatuses =>
       List<C2paCertificateStatusAssertion>.unmodifiable(
         standardAssertions.whereType<C2paCertificateStatusAssertion>(),
       );
+
+  /// Legacy JSON assertions decoded from [standardAssertions].
   List<C2paLegacyJsonAssertion> get legacyAssertions =>
       List<C2paLegacyJsonAssertion>.unmodifiable(
         standardAssertions.whereType<C2paLegacyJsonAssertion>(),
@@ -188,6 +269,7 @@ final class C2paManifestEntry {
       ? value
       : 'self#jumbf=c2pa.assertions/$value';
 
+  /// Combined validation issues with URLs normalized to absolute JUMBF paths.
   List<ValidationIssue> get validationIssues =>
       List<ValidationIssue>.unmodifiable(
         [
@@ -229,6 +311,15 @@ final class C2paReader {
        manifests = UnmodifiableMapView(manifests),
        rawManifestEntries = List<C2paRawBox>.unmodifiable(rawManifestEntries);
 
+  /// Reads, parses, and validates C2PA manifests from an asset or manifest.
+  ///
+  /// Performs I/O through [source], optional [manifestSource], optional
+  /// [assetSource], and any [fragments]. If an asset contains only a remote
+  /// provenance reference, this may perform network I/O through [context].
+  /// Throws [C2paParseException] for extraction or manifest syntax failures,
+  /// [C2paUnsupportedException] for unsupported asset features,
+  /// [C2paUriPolicyException] for disallowed remote references, and
+  /// [C2paRemoteTransportException] when a remote fetch fails.
   static Future<C2paReader> fromSource({
     required RandomAccessByteSource source,
     String? mimeType,
@@ -521,6 +612,10 @@ final class C2paReader {
     );
   }
 
+  /// Reads a fragmented BMFF asset with an initialization segment and fragments.
+  ///
+  /// Performs I/O through [initializationSegment] and [fragments]. Throws the
+  /// same exceptions as [fromSource].
   static Future<C2paReader> fromFragmentedBmff({
     required RandomAccessByteSource initializationSegment,
     required Iterable<RandomAccessByteSource> fragments,
@@ -536,24 +631,44 @@ final class C2paReader {
     context: context,
   );
 
+  /// Context used for settings, trust configuration, transports, and progress.
   final C2paContext context;
+
+  /// Complete serialized manifest store bytes read from the asset or source.
   final Uint8List manifestBytes;
+
+  /// Parsed manifests keyed by their manifest labels.
   final Map<String, C2paManifestEntry> manifests;
+
+  /// Raw top-level boxes contained by the C2PA manifest store.
   final List<C2paRawBox> rawManifestEntries;
+
+  /// Label of the active manifest, or `null` when no manifest was parsed.
   final String? activeManifestLabel;
+
+  /// Validation results for the active manifest and ingredient graph.
   final ValidationResults validationResults;
 
+  /// Active manifest entry, or `null` when [activeManifestLabel] is absent.
   C2paManifestEntry? get activeManifest {
     final label = activeManifestLabel;
     return label == null ? null : manifests[label];
   }
 
+  /// Claim from the active manifest, or `null` when absent or malformed.
   Claim? get activeClaim => activeManifest?.claim;
 
+  /// Embedded resources from all parsed manifests.
   List<C2paResource> get resources => List<C2paResource>.unmodifiable(
     manifests.values.expand((entry) => entry.resources),
   );
 
+  /// Resolves an embedded resource URI or label within manifest scope.
+  ///
+  /// Searches the active manifest by default and, when [includeIngredients] is
+  /// true, manifests reachable through ingredient references. Throws
+  /// [C2paResourceNotFoundException] if no resource matches and
+  /// [C2paAmbiguousResourceException] if a label matches more than once.
   Future<C2paResource> lookupResource(
     String uri, {
     String? manifestLabel,

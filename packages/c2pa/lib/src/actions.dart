@@ -2,40 +2,86 @@ import 'claim.dart';
 import 'intent.dart';
 import 'json_utils.dart';
 
+/// Canonical action names for the `c2pa.actions` assertion.
 abstract final class C2paActionNames {
+  /// Color or tone adjustments applied to asset content.
   static const colorAdjustments = 'c2pa.color_adjustments';
+
+  /// Conversion from one format or representation to another.
   static const converted = 'c2pa.converted';
+
+  /// Initial creation of the asset or manifest provenance chain.
   static const created = 'c2pa.created';
+
+  /// Cropping that removed pixels or samples from an asset.
   static const cropped = 'c2pa.cropped';
+
+  /// Drawing or brush-like edits added to visual content.
   static const drawing = 'c2pa.drawing';
+
+  /// Generic editing when no more specific action applies.
   static const edited = 'c2pa.edited';
+
+  /// Filter effects applied to asset content.
   static const filtered = 'c2pa.filtered';
+
+  /// Opening an existing parent asset for edit or update provenance.
   static const opened = 'c2pa.opened';
+
+  /// Orientation or rotation changes applied to the asset.
   static const orientation = 'c2pa.orientation';
+
+  /// Placement of an ingredient into the asset composition.
   static const placed = 'c2pa.placed';
+
+  /// Removal of content from the asset composition.
   static const removed = 'c2pa.removed';
+
+  /// Redaction of a provenance assertion from an ingredient manifest.
   static const redacted = 'c2pa.redacted';
+
+  /// Publication or export of the asset for distribution.
   static const published = 'c2pa.published';
+
+  /// Packaging changes that preserve the underlying content.
   static const repackaged = 'c2pa.repackaged';
+
+  /// Image, video, or canvas dimensions were changed.
   static const resized = 'c2pa.resized';
+
+  /// Media encoding was changed without asserting semantic edits.
   static const transcoded = 'c2pa.transcoded';
+
+  /// Human language content was translated.
   static const translated = 'c2pa.translated';
+
+  /// Action with unknown or unspecified provenance semantics.
   static const unknown = 'c2pa.unknown';
 }
 
+/// Software identity attached to a provenance action.
 sealed class ActionSoftwareAgent {
+  /// Creates a software-agent value for an action.
   const ActionSoftwareAgent();
 
+  /// Decodes a software agent from a CBOR string or info map.
+  ///
+  /// Throws [FormatException] if a non-string value is not generator info.
   factory ActionSoftwareAgent.fromCbor(Object? value) {
     if (value is String) return ActionSoftwareAgentName(value);
     return ActionSoftwareAgentInfo(ClaimGeneratorInfo.fromCbor(value));
   }
 
+  /// Encodes this agent for a `softwareAgent` CBOR field.
   Object toCbor();
 }
 
+/// A software agent represented only by its display name.
 final class ActionSoftwareAgentName extends ActionSoftwareAgent {
+  /// Creates a string-valued software-agent reference.
   const ActionSoftwareAgentName(this.name);
+
+  /// The software-agent name stored directly in CBOR.
   final String name;
 
   @override
@@ -49,8 +95,12 @@ final class ActionSoftwareAgentName extends ActionSoftwareAgent {
   int get hashCode => name.hashCode;
 }
 
+/// A software agent represented by structured generator info.
 final class ActionSoftwareAgentInfo extends ActionSoftwareAgent {
+  /// Creates a structured software-agent reference.
   const ActionSoftwareAgentInfo(this.info);
+
+  /// Structured claim-generator metadata for the software agent.
   final ClaimGeneratorInfo info;
 
   @override
@@ -64,13 +114,18 @@ final class ActionSoftwareAgentInfo extends ActionSoftwareAgent {
   int get hashCode => info.hashCode;
 }
 
+/// A human or system actor associated with a C2PA action.
 final class ActionActor {
+  /// Creates an actor and freezes unrecognized extension fields.
   ActionActor({
     this.identifier,
     this.type,
     Map<String, Object?> extra = const {},
   }) : extra = freezeJsonMap(extra);
 
+  /// Decodes an action actor from a string-keyed CBOR map.
+  ///
+  /// Throws [FormatException] if [value] is not a string-keyed map.
   factory ActionActor.fromCbor(Object? value) {
     final map = _stringMap(value, 'actor');
     return ActionActor(
@@ -80,10 +135,16 @@ final class ActionActor {
     );
   }
 
+  /// Actor identifier, or `null` when the actor is anonymous.
   final String? identifier;
+
+  /// Actor type such as a role URI, or `null` when unspecified.
   final String? type;
+
+  /// Unrecognized actor fields preserved for round-tripping.
   final Map<String, Object?> extra;
 
+  /// Encodes this action as a CBOR map.
   Map<String, Object?> toCborMap() => {
     ...extra,
     if (identifier != null) 'identifier': identifier,
@@ -101,9 +162,15 @@ final class ActionActor {
   int get hashCode => Object.hash(identifier, type, deepHash(extra));
 }
 
+/// A region or segment affected by an action.
 final class ActionRegion {
+  /// Creates a region from a string-keyed map and freezes it.
   ActionRegion(Map<String, Object?> value) : value = freezeJsonMap(value);
+
+  /// Region fields as defined by the producer or C2PA vocabulary.
   final Map<String, Object?> value;
+
+  /// Encodes this region as a CBOR map.
   Map<String, Object?> toCborMap() => value;
 
   @override
@@ -114,7 +181,11 @@ final class ActionRegion {
   int get hashCode => deepHash(value);
 }
 
+/// Action-specific parameters for the `c2pa.actions` vocabulary.
 final class ActionParameters {
+  /// Creates parameters and freezes collection fields.
+  ///
+  /// A `null` property is omitted from the encoded assertion.
   ActionParameters({
     this.ingredient,
     Iterable<ClaimHashedUri>? ingredients,
@@ -133,6 +204,9 @@ final class ActionParameters {
            : List<String>.unmodifiable(ingredientIds),
        common = freezeJsonMap(common);
 
+  /// Decodes action parameters from CBOR, including legacy IDs.
+  ///
+  /// Throws [FormatException] if [value] is not a string-keyed map.
   factory ActionParameters.fromCbor(
     Object? value, {
     Iterable<String>? legacyIngredientIds,
@@ -175,16 +249,34 @@ final class ActionParameters {
     );
   }
 
+  /// Single ingredient URI affected by the action, or `null`.
   final ClaimHashedUri? ingredient;
+
+  /// Ingredient URIs affected by the action, or `null` when absent.
   final List<ClaimHashedUri>? ingredients;
+
+  /// Builder ingredient IDs affected by the action, or `null`.
   final List<String>? ingredientIds;
+
+  /// Human-readable action description, or `null` when omitted.
   final String? description;
+
+  /// Redacted assertion URI for `c2pa.redacted`, or `null`.
   final String? redacted;
+
+  /// BCP 47 source language for translation, or `null`.
   final String? sourceLanguage;
+
+  /// BCP 47 target language for translation, or `null`.
   final String? targetLanguage;
+
+  /// Whether the action applies to multiple instances, or `null`.
   final bool? multipleInstances;
+
+  /// Common or extension parameters preserved for round-tripping.
   final Map<String, Object?> common;
 
+  /// Encodes these parameters as a CBOR map.
   Map<String, Object?> toCborMap() => {
     ...common,
     if (ingredient != null) 'ingredient': ingredient!.toCborMap(),
@@ -227,7 +319,11 @@ final class ActionParameters {
   );
 }
 
+/// One provenance action recorded in a `c2pa.actions` assertion.
 final class C2paAction {
+  /// Creates an action and freezes repeatable fields.
+  ///
+  /// The [action] name must be non-empty when encoded or decoded.
   C2paAction({
     required this.action,
     this.when,
@@ -251,6 +347,9 @@ final class C2paAction {
            : List<C2paAction>.unmodifiable(related),
        unknownFields = freezeJsonMap(unknownFields);
 
+  /// Decodes a C2PA action from a CBOR map.
+  ///
+  /// Throws [FormatException] if required fields are missing or malformed.
   factory C2paAction.fromCbor(Object? value) {
     final map = _stringMap(value, 'action');
     final action = map['action'];
@@ -306,20 +405,46 @@ final class C2paAction {
     );
   }
 
+  /// Action name, usually one of [C2paActionNames].
   final String action;
+
+  /// UTC action timestamp, or `null` when not recorded.
   final DateTime? when;
+
+  /// Software agent that performed the action, or `null`.
   final ActionSoftwareAgent? softwareAgent;
+
+  /// Index into assertion-level software agents, or `null`.
   final int? softwareAgentIndex;
+
+  /// Legacy changed-region marker, or `null` when absent.
   final String? changed;
+
+  /// Regions changed by the action, or `null` when unspecified.
   final List<ActionRegion>? regions;
+
+  /// Action-specific parameters, or `null` when absent.
   final ActionParameters? parameters;
+
+  /// Actors associated with the action, or `null` when omitted.
   final List<ActionActor>? actors;
+
+  /// Digital source type URI value for creation actions, or `null`.
   final DigitalSourceType? sourceType;
+
+  /// Nested related actions, or `null` when none are declared.
   final List<C2paAction>? related;
+
+  /// Reason for the action, or `null` when not supplied.
   final String? reason;
+
+  /// Human-readable action description, or `null` when omitted.
   final String? description;
+
+  /// Unrecognized assertion fields preserved for round-tripping.
   final Map<String, Object?> unknownFields;
 
+  /// Encodes this action as a CBOR map.
   Map<String, Object?> toCborMap() => {
     ...unknownFields,
     'action': action,
@@ -378,7 +503,11 @@ final class C2paAction {
   ]);
 }
 
+/// The C2PA `c2pa.actions` assertion.
 final class ActionsAssertion {
+  /// Creates an actions assertion with immutable action lists.
+  ///
+  /// At least one action is required when decoding from CBOR.
   ActionsAssertion({
     required Iterable<C2paAction> actions,
     this.version = 2,
@@ -399,6 +528,9 @@ final class ActionsAssertion {
        metadata = freezeJsonMap(metadata),
        unknownFields = freezeJsonMap(unknownFields);
 
+  /// Decodes an actions assertion of the given [version].
+  ///
+  /// Throws [FormatException] if the assertion lacks actions.
   factory ActionsAssertion.fromCbor(Object? value, {required int version}) {
     final map = _stringMap(value, 'actions assertion');
     final actions = _optionalList(map['actions']);
@@ -426,19 +558,37 @@ final class ActionsAssertion {
     );
   }
 
+  /// Version 1 assertion label `c2pa.actions`.
   static const label = 'c2pa.actions';
+
+  /// Version 2 assertion label `c2pa.actions.v2`.
   static const versionedLabel = 'c2pa.actions.v2';
 
+  /// Actions assertion version used to choose the encoded label.
   final int version;
+
+  /// Ordered provenance actions recorded by this assertion.
   final List<C2paAction> actions;
+
+  /// Shared software-agent table, or `null` when not present.
   final List<ClaimGeneratorInfo>? softwareAgents;
+
+  /// Whether the list is complete, or `null` when unspecified.
   final bool? allActionsIncluded;
+
+  /// Action templates preserved from CBOR, or `null` when absent.
   final List<Map<String, Object?>>? templates;
+
+  /// Assertion metadata map; empty when no metadata is present.
   final Map<String, Object?> metadata;
+
+  /// Unrecognized assertion fields preserved for round-tripping.
   final Map<String, Object?> unknownFields;
 
+  /// The label used when this assertion is embedded in JUMBF.
   String get assertionLabel => version == 1 ? label : versionedLabel;
 
+  /// Encodes this actions assertion as a CBOR map.
   Map<String, Object?> toCborMap() => {
     ...unknownFields,
     'actions': actions.map((item) => item.toCborMap()).toList(growable: false),

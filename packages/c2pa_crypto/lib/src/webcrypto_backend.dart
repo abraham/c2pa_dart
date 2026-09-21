@@ -7,11 +7,13 @@ import 'cose_signing.dart';
 import 'ecdsa_signature.dart';
 import 'signing_algorithm.dart';
 
+/// A WebCrypto ECDSA private/public key pair.
 typedef WebCryptoEcdsaKeyPair = ({
   webcrypto.EcdsaPrivateKey privateKey,
   webcrypto.EcdsaPublicKey publicKey,
 });
 
+/// A WebCrypto RSA-PSS private/public key pair.
 typedef WebCryptoRsaPssKeyPair = ({
   webcrypto.RsaPssPrivateKey privateKey,
   webcrypto.RsaPssPublicKey publicKey,
@@ -420,6 +422,7 @@ final class _SpkiDerReader {
 
 /// Platform-backed ECDSA signer that emits fixed-width P1363 signatures.
 final class WebCryptoEcdsaSigningBackend implements CoseSigningBackend {
+  /// Creates a platform-backed ECDSA signer for [algorithm].
   WebCryptoEcdsaSigningBackend(this.algorithm, this.privateKey)
     : _parameters = _ecdsaParameters(algorithm),
       _keyValidation = _validateEcdsaKey(
@@ -427,7 +430,10 @@ final class WebCryptoEcdsaSigningBackend implements CoseSigningBackend {
         algorithm,
       );
 
+  /// The configured ECDSA signing algorithm.
   final SigningAlgorithm algorithm;
+
+  /// The WebCrypto private key used to produce signatures.
   final webcrypto.EcdsaPrivateKey privateKey;
   final _EcdsaParameters _parameters;
   final Future<void> _keyValidation;
@@ -461,6 +467,7 @@ final class WebCryptoEcdsaSigningBackend implements CoseSigningBackend {
 /// Platform-backed ECDSA verifier for fixed-width P1363 signatures.
 final class WebCryptoEcdsaVerificationBackend
     implements CoseVerificationBackend {
+  /// Creates a platform-backed ECDSA verifier for [algorithm].
   WebCryptoEcdsaVerificationBackend(this.algorithm, this.publicKey)
     : _parameters = _ecdsaParameters(algorithm),
       _keyValidation = _validateEcdsaKey(
@@ -468,7 +475,10 @@ final class WebCryptoEcdsaVerificationBackend
         algorithm,
       );
 
+  /// The configured ECDSA verification algorithm.
   final SigningAlgorithm algorithm;
+
+  /// The WebCrypto public key used to verify signatures.
   final webcrypto.EcdsaPublicKey publicKey;
   final _EcdsaParameters _parameters;
   final Future<void> _keyValidation;
@@ -499,6 +509,7 @@ final class WebCryptoEcdsaVerificationBackend
 
 /// Platform-backed RSA-PSS signer using a digest-sized salt.
 final class WebCryptoRsaPssSigningBackend implements CoseSigningBackend {
+  /// Creates a platform-backed RSA-PSS signer using digest-sized salt.
   WebCryptoRsaPssSigningBackend(this.algorithm, this.privateKey)
     : _parameters = _rsaParameters(algorithm),
       _keyValidation = _validateRsaKey(
@@ -506,7 +517,10 @@ final class WebCryptoRsaPssSigningBackend implements CoseSigningBackend {
         algorithm,
       );
 
+  /// The configured RSA-PSS signing algorithm.
   final SigningAlgorithm algorithm;
+
+  /// The WebCrypto RSA-PSS private key used to produce signatures.
   final webcrypto.RsaPssPrivateKey privateKey;
   final _RsaParameters _parameters;
   final Future<void> _keyValidation;
@@ -526,11 +540,15 @@ final class WebCryptoRsaPssSigningBackend implements CoseSigningBackend {
 /// Platform-backed RSA-PSS verifier using a digest-sized salt.
 final class WebCryptoRsaPssVerificationBackend
     implements CoseVerificationBackend {
+  /// Creates a platform-backed RSA-PSS verifier using digest-sized salt.
   WebCryptoRsaPssVerificationBackend(this.algorithm, this.publicKey)
     : _parameters = _rsaParameters(algorithm),
       _keyValidation = _validateRsaKey(publicKey.exportJsonWebKey(), algorithm);
 
+  /// The configured RSA-PSS verification algorithm.
   final SigningAlgorithm algorithm;
+
+  /// The WebCrypto RSA-PSS public key used to verify signatures.
   final webcrypto.RsaPssPublicKey publicKey;
   final _RsaParameters _parameters;
   final Future<void> _keyValidation;

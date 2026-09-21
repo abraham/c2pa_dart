@@ -2,28 +2,60 @@ import 'dart:convert';
 
 import 'differential.dart';
 
+/// A conformance report field that can be projected or ignored.
 enum ConformanceField {
+  /// The active manifest label selected for validation.
   activeManifest,
+
+  /// The sorted set of manifest labels present in the report.
   manifestLabels,
+
+  /// The sorted set of assertion labels on the active manifest.
   assertionLabels,
+
+  /// The normalized assertion hashes, paired with labels when available.
   assertionHashes,
+
+  /// The normalized validation severity or category names.
   validationCategories,
+
+  /// The normalized validation status or error codes.
   validationCodes,
+
+  /// The normalized validation failure or status URLs.
   validationUrls,
+
+  /// The normalized validation state, such as `valid` or `invalid`.
   state,
+
+  /// The lower-case signature algorithm reported for the active claim.
   signatureAlgorithm,
+
+  /// The normalized ingredient validation deltas.
   ingredientDeltas,
+
+  /// The normalized CAWG identity assertion summaries.
   identityAssertions,
 }
 
+/// A set of conformance fields excluded from comparison.
 final class ConformanceIgnore {
+  /// Creates an ignore set for known-acceptable oracle divergences.
+  ///
+  /// An empty [fields] set means every projected field is compared.
   const ConformanceIgnore([this.fields = const {}]);
 
+  /// The conformance fields to omit from both Dart and oracle projections.
   final Set<ConformanceField> fields;
 
+  /// Checks whether [field] is excluded from the comparison.
   bool ignores(ConformanceField field) => fields.contains(field);
 }
 
+/// Converts a package-specific report into conformance JSON fields.
+///
+/// Implementations should return only JSON-compatible values; malformed
+/// shapes are surfaced as [FormatException] during projection.
 typedef ConformanceProjector<T> = Map<String, Object?> Function(T value);
 
 /// Normalizes the conformance-relevant subset of Dart and c2pa-rs reports.
@@ -34,19 +66,31 @@ typedef ConformanceProjector<T> = Map<String, Object?> Function(T value);
 /// the projection so interoperability failures cannot be hidden by wording
 /// differences.
 final class ConformanceReportProjection<T> implements ReportProjection<T> {
+  /// Creates a projection that normalizes Dart and optional oracle reports.
+  ///
+  /// When [oracleProjector] is omitted, the oracle JSON must already be a map.
   const ConformanceReportProjection({
     required this.dartProjector,
     this.oracleProjector,
     this.ignore = const ConformanceIgnore(),
   });
 
+  /// Converts the Dart SDK result into the report shape under test.
   final ConformanceProjector<T> dartProjector;
+
+  /// Optional converter for oracle JSON before normalization.
+  ///
+  /// A `null` value means [projectOracleJson] treats the input as a JSON map.
   final ConformanceProjector<Object?>? oracleProjector;
+
+  /// The fields intentionally omitted from both normalized reports.
   final ConformanceIgnore ignore;
 
+  /// Projects a Dart result into the normalized conformance subset.
   @override
   Object? projectDart(T value) => _project(dartProjector(value));
 
+  /// Projects c2pa-rs JSON into the normalized conformance subset.
   @override
   Object? projectOracleJson(Object? json) =>
       _project(oracleProjector?.call(json) ?? _asMap(json, 'oracle report'));
@@ -175,13 +219,18 @@ final class ConformanceReportProjection<T> implements ReportProjection<T> {
   }
 }
 
+/// Attribution and licensing for a conformance fixture asset.
 final class ConformanceFixtureSource {
+  /// Creates source metadata for a fixture index entry.
   const ConformanceFixtureSource({
     required this.url,
     required this.license,
     this.attribution,
   });
 
+  /// Parses fixture source metadata from a JSON object.
+  ///
+  /// Throws [FormatException] when required string fields are missing or empty.
   factory ConformanceFixtureSource.fromJson(Map<String, Object?> json) {
     return ConformanceFixtureSource(
       url: _requiredString(json, 'url'),
@@ -190,12 +239,22 @@ final class ConformanceFixtureSource {
     );
   }
 
+  /// The upstream location or identifier for the fixture asset.
   final String url;
+
+  /// The SPDX-style license expression for using the fixture in tests.
   final String license;
+
+  /// Optional human-readable attribution required by the source license.
   final String? attribution;
 }
 
+/// A single asset entry in a conformance fixture index.
 final class ConformanceFixture {
+  /// Creates a fixture entry with immutable [metadata].
+  ///
+  /// The [asset] path must be relative to the fixture index directory when
+  /// loaded by the VM fixture loader.
   ConformanceFixture({
     required this.id,
     required this.asset,
@@ -204,6 +263,10 @@ final class ConformanceFixture {
     Map<String, Object?> metadata = const {},
   }) : metadata = Map.unmodifiable(metadata);
 
+  /// Parses a fixture entry from index JSON.
+  ///
+  /// Throws [FormatException] for missing fields, empty strings, or absolute
+  /// and parent-traversing asset paths.
   factory ConformanceFixture.fromJson(Map<String, Object?> json) {
     return ConformanceFixture(
       id: _requiredString(json, 'id'),
@@ -219,16 +282,31 @@ final class ConformanceFixture {
     );
   }
 
+  /// Stable identifier used in test names and divergence allowlists.
   final String id;
+
+  /// Relative path to the fixture bytes within the corpus checkout.
   final String asset;
+
+  /// Source, license, and attribution data for redistributing the fixture.
   final ConformanceFixtureSource source;
+
+  /// Optional reason this fixture is listed but should not be exercised.
   final String? skipReason;
+
+  /// Extra JSON-compatible metadata such as expected size or SHA-256.
   final Map<String, Object?> metadata;
 
+  /// Whether [skipReason] marks this fixture as intentionally unsupported.
   bool get isSkipped => skipReason != null;
 }
 
+/// A validated index of conformance fixtures.
 final class ConformanceFixtureIndex {
+  /// Creates an index and validates schema and unique fixture identifiers.
+  ///
+  /// Throws [ArgumentError] when [schemaVersion] is less than 1 and
+  /// [FormatException] when duplicate fixture IDs are present.
   ConformanceFixtureIndex({
     required this.schemaVersion,
     required Iterable<ConformanceFixture> fixtures,
@@ -244,6 +322,10 @@ final class ConformanceFixtureIndex {
     }
   }
 
+  /// Parses an index JSON object into validated fixture entries.
+  ///
+  /// Accepts `schemaVersion` or `schema_version` and requires `fixtures` to be
+  /// a JSON array.
   factory ConformanceFixtureIndex.fromJson(Map<String, Object?> json) {
     final schemaVersion = json['schemaVersion'] ?? json['schema_version'];
     if (schemaVersion is! int) {
@@ -262,7 +344,10 @@ final class ConformanceFixtureIndex {
     );
   }
 
+  /// The fixture index schema version; currently values must be at least 1.
   final int schemaVersion;
+
+  /// Immutable fixture entries in the order declared by the index.
   final List<ConformanceFixture> fixtures;
 }
 

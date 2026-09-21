@@ -10,25 +10,46 @@ import 'package:c2pa_io/c2pa_io_vm.dart';
 
 import 'signers.dart';
 
+/// Development version string reported by the command-line interface.
 const c2patoolVersion = '0.1.0-dev.1';
 
+/// Process exit codes used by `c2patool_dart`.
 abstract final class CliExitCode {
+  /// Exit code for successful command completion.
   static const success = 0;
+
+  /// Exit code for validation or parsing failures in C2PA content.
   static const validation = 65;
+
+  /// Exit code for policy failures, such as blocked network access.
   static const policy = 77;
+
+  /// Exit code for invalid command-line arguments or option combinations.
   static const usage = 64;
+
+  /// Exit code for file, network, or generic I/O failures.
   static const io = 74;
+
+  /// Exit code for signing failures.
   static const signing = 75;
 }
 
+/// Result produced by running a CLI command in-process.
 final class CliResult {
+  /// Creates a command result with buffered [stdout] and [stderr] text.
   const CliResult(this.exitCode, {this.stdout = '', this.stderr = ''});
 
+  /// Process exit code that should be returned to the caller.
   final int exitCode;
+
+  /// Text to write to standard output.
   final String stdout;
+
+  /// Text to write to standard error.
   final String stderr;
 }
 
+/// Runs `c2patool_dart` with [arguments] and writes buffered output to sinks.
 Future<int> runC2paCli(
   List<String> arguments, {
   IOSink? stdoutSink,
@@ -45,12 +66,18 @@ Future<int> runC2paCli(
   return result.exitCode;
 }
 
+/// In-process implementation of the `c2patool_dart` command-line interface.
 final class C2paCli {
+  /// Creates a CLI runner, optionally observing each input path as it opens.
   C2paCli({this.onInputOpened}) : parser = _createParser();
 
+  /// Argument parser containing all supported commands and options.
   final ArgParser parser;
+
+  /// Optional callback invoked after each input file is opened.
   final Future<void> Function(String path)? onInputOpened;
 
+  /// Parses and executes [arguments], returning buffered output and exit code.
   Future<CliResult> run(List<String> arguments) async {
     ArgResults options;
     try {

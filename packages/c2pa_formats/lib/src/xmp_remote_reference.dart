@@ -6,9 +6,11 @@ import 'package:c2pa_io/c2pa_io.dart';
 import 'asset_format.dart';
 import 'errors.dart';
 
+/// An editor for the XMP `dcterms:provenance` remote manifest reference.
 final class XmpRemoteReferenceEditor {
   XmpRemoteReferenceEditor._(this._bytes, this._document, this._reference);
 
+  /// Minimal UTF-8 XMP packet containing one editable `rdf:Description`.
   static const String minimalPacket =
       '<?xpacket begin="" id="W5M0MpCehiHzreSzNTczkc9d"?>'
       '<x:xmpmeta xmlns:x="adobe:ns:meta/" x:xmptk="XMP Core 6.0.0">'
@@ -22,6 +24,12 @@ final class XmpRemoteReferenceEditor {
       'xmpMM:InstanceID="xmp.iid:cb9f5498-bb58-4572-8043-8c369e6bfb9b">'
       ' </rdf:Description></rdf:RDF></x:xmpmeta><?xpacket end="w"?>';
 
+  /// Parses [bytes] as an XMP packet whose length is limited by [maxLength].
+  ///
+  /// The editor accepts `dcterms:provenance` either as an attribute on
+  /// `rdf:Description` or as a direct child element. Throws
+  /// [MalformedAssetFormatException] for invalid UTF-8, malformed XML, nested
+  /// provenance content, or multiple provenance values.
   factory XmpRemoteReferenceEditor.parse(
     Uint8List bytes, {
     required int maxLength,
@@ -117,8 +125,14 @@ final class XmpRemoteReferenceEditor {
   final _XmpDocument _document;
   final _XmpValue? _reference;
 
+  /// Current `dcterms:provenance` value, or `null` when absent.
   String? get value => _reference?.value;
 
+  /// Returns XMP bytes with `dcterms:provenance` set to [value].
+  ///
+  /// Throws [MalformedAssetFormatException] when [value] is not valid XML text
+  /// or the packet has no `rdf:Description`. Throws
+  /// [AssetLimitExceededException] if the edited packet exceeds [maxLength].
   Uint8List update(String value, {required int maxLength}) {
     if (!_validXmlString(value)) {
       throw const MalformedAssetFormatException(
@@ -185,6 +199,11 @@ final class XmpRemoteReferenceEditor {
     return edited;
   }
 
+  /// Returns XMP bytes with the `dcterms:provenance` value removed.
+  ///
+  /// Throws [RemoteManifestReferenceNotFoundException] when no provenance value
+  /// exists and [AssetLimitExceededException] if padding preservation exceeds
+  /// [maxLength].
   Uint8List remove({required int maxLength}) {
     final existing = _reference;
     if (existing == null) {

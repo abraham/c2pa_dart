@@ -21,11 +21,14 @@ const _archiveUuid = '633270612d617263686976652d763100';
 const _archiveLabel = 'c2pa.archive';
 const _archiveFormat = 'c2pa.builder.archive';
 
+/// Callback that resolves external resources while loading an archive.
 typedef C2paArchiveResourceResolver = FutureOr<Uint8List?> Function(
   C2paArchiveResourceRequest request,
 );
 
+/// External resource request from a C2PA builder archive.
 final class C2paArchiveResourceRequest {
+  /// Creates an external archive resource request.
   const C2paArchiveResourceRequest({
     required this.uri,
     required this.path,
@@ -33,18 +36,29 @@ final class C2paArchiveResourceRequest {
     this.format,
   });
 
+  /// Archive resource URI to satisfy.
   final String uri;
+
+  /// Safe relative path recorded for the external resource.
   final String path;
+
+  /// Optional safe relative base path for resolving [path].
   final String? basePath;
+
+  /// Optional media type recorded for the external resource.
   final String? format;
 }
 
+/// Options used when loading a C2PA builder archive.
 final class C2paArchiveLoadOptions {
+  /// Creates archive load options.
   const C2paArchiveLoadOptions({this.resourceResolver});
 
+  /// Resolver for external resources, or `null` to reject them.
   final C2paArchiveResourceResolver? resourceResolver;
 }
 
+/// Encodes [builder] as a deterministic C2PA JUMBF working archive.
 Uint8List encodeC2paBuilderArchive(C2paBuilder builder) {
   if (builder.timestamp?.usesCallback == true) {
     throw const C2paArchiveException(
@@ -90,6 +104,7 @@ Uint8List encodeC2paBuilderArchive(C2paBuilder builder) {
   ).encode();
 }
 
+/// Loads a [C2paBuilder] from JUMBF or legacy ZIP archive bytes.
 Future<C2paBuilder> loadC2paBuilderArchive({
   required List<int> bytes,
   required C2paContext context,
@@ -470,6 +485,7 @@ Future<C2paBuilder> _builderFromArchiveMap(
   );
 }
 
+/// Creates an edit-mode [C2paBuilder] from a parsed reader.
 Future<C2paBuilder> c2paBuilderFromReader({
   required C2paReader reader,
   C2paContext? context,

@@ -29,18 +29,42 @@ import 'validation.dart';
 import 'validation_code.dart';
 import 'working_archive.dart';
 
-enum AssertionEncoding { json, cbor, binary }
+/// The wire encoding used for a custom assertion payload.
+enum AssertionEncoding {
+  /// JSON assertion payload encoded with canonical key ordering.
+  json,
 
+  /// CBOR assertion payload encoded deterministically.
+  cbor,
+
+  /// Opaque binary assertion payload with a required content type.
+  binary,
+}
+
+/// Ordered phases of embedded DataHash manifest construction.
 enum DataHashBuildState {
+  /// No DataHash placeholder has been created yet.
   draft,
+
+  /// A zero-valued DataHash placeholder manifest has been built.
   placeholderCreated,
+
+  /// The placeholder manifest has been embedded in the asset.
   placeholderEmbedded,
+
+  /// The final asset digest and exclusion ranges have been computed.
   bindingFinalized,
+
+  /// The final manifest has been signed at the reserved size.
   signed,
+
+  /// The signed manifest has replaced the embedded placeholder.
   patched,
 }
 
+/// Bytes produced by sidecar manifest generation.
 final class C2paSidecarResult {
+  /// Creates an immutable sidecar result from caller-owned bytes.
   C2paSidecarResult({
     required List<int> manifestBytes,
     List<int>? assetBytes,
@@ -50,8 +74,13 @@ final class C2paSidecarResult {
            ? null
            : Uint8List.fromList(assetBytes).asUnmodifiableView();
 
+  /// Standalone manifest bytes suitable for a sidecar file.
   final Uint8List manifestBytes;
+
+  /// Updated asset bytes, or `null` when the asset was unchanged.
   final Uint8List? assetBytes;
+
+  /// Default remote manifest URL for sidecar builds, or `null`.
   final Uri? remoteManifestUrl;
 }
 
@@ -59,8 +88,12 @@ final class C2paSidecarResult {
 final class DataHashBuildStateMachine {
   DataHashBuildState _state = DataHashBuildState.draft;
 
+  /// The current embedded DataHash build phase.
   DataHashBuildState get state => _state;
 
+  /// Advances to the next DataHash build phase.
+  ///
+  /// Throws [C2paSigningException] if [next] is not the immediate next state.
   void advance(DataHashBuildState next) {
     if (next.index != _state.index + 1) {
       throw C2paSigningException(
@@ -73,6 +106,9 @@ final class DataHashBuildStateMachine {
 
 /// A custom assertion encoded deterministically as JSON or CBOR.
 final class AssertionDefinition {
+  /// Creates a custom assertion definition.
+  ///
+  /// Throws [C2paValidationException] when binary data lacks a content type.
   AssertionDefinition({
     required this.label,
     required Object? data,
@@ -87,12 +123,15 @@ final class AssertionDefinition {
     }
   }
 
+  /// Creates a JSON assertion with canonical JSON encoding.
   AssertionDefinition.json({required String label, required Object? data})
     : this(label: label, data: data, encoding: AssertionEncoding.json);
 
+  /// Creates a CBOR assertion with deterministic CBOR encoding.
   AssertionDefinition.cbor({required String label, required Object? data})
     : this(label: label, data: data);
 
+  /// Creates a binary assertion with an embedded-file content type.
   AssertionDefinition.binary({
     required String label,
     required String contentType,
@@ -104,9 +143,16 @@ final class AssertionDefinition {
          contentType: contentType,
        );
 
+  /// Assertion label used under `c2pa.assertions`.
   final String label;
+
+  /// Frozen assertion payload data to encode.
   final Object? data;
+
+  /// Encoding used when writing [data] into the manifest.
   final AssertionEncoding encoding;
+
+  /// Media type for binary assertions, otherwise `null`.
   final String? contentType;
 
   @override
@@ -123,7 +169,11 @@ final class AssertionDefinition {
 
 /// Caller-owned bytes placed in the manifest's data-box store.
 final class ManifestResource {
+  /// Creates an immutable data-box resource from caller-owned bytes.
   ManifestResource({
+    /// Resource label used under `c2pa.databoxes`.
+    ///
+    /// Must be unique within a [ManifestDefinition].
     required this.label,
     required this.format,
     required Uint8List bytes,
@@ -134,11 +184,22 @@ final class ManifestResource {
        dataTypes = List<String>.unmodifiable(dataTypes),
        extra = freezeJsonMap(extra);
 
+  /// Resource label used under `c2pa.databoxes`.
   final String label;
+
+  /// Resource media type; must be non-empty during signing.
   final String format;
+
+  /// Optional display name stored with the resource.
   final String? name;
+
+  /// C2PA data type hints associated with the resource.
   final List<String> dataTypes;
+
+  /// Extra resource fields preserved in the data-box CBOR map.
   final Map<String, Object?> extra;
+
+  /// Immutable resource payload bytes stored in the manifest.
   final Uint8List bytes;
 
   @override
@@ -164,6 +225,9 @@ final class ManifestResource {
 
 /// An ingredient and, when available, its embedded manifest box.
 final class BuilderIngredient {
+  /// Creates an ingredient and freezes embedded manifest boxes.
+  ///
+  /// Throws [C2paValidationException] if [id] conflicts with the assertion ID.
   BuilderIngredient({
     required this.id,
     required this.assertion,
@@ -183,6 +247,9 @@ final class BuilderIngredient {
     }
   }
 
+  /// Builds an ingredient from a reader's active manifest.
+  ///
+  /// Throws [C2paValidationException] if no active manifest or signature exists.
   static Future<BuilderIngredient> fromReader({
     required C2paReader reader,
     required Relationship relationship,
@@ -250,6 +317,9 @@ final class BuilderIngredient {
     );
   }
 
+  /// Reads [source] and builds an ingredient from its active manifest.
+  ///
+  /// Performs asset I/O through [C2paReader].
   static Future<BuilderIngredient> fromSource({
     required RandomAccessByteSource source,
     required Relationship relationship,
@@ -272,8 +342,13 @@ final class BuilderIngredient {
     format: format ?? mimeType,
   );
 
+  /// Builder-local ingredient ID referenced by actions.
   final String id;
+
+  /// Ingredient assertion embedded into the new manifest.
   final IngredientAssertion assertion;
+
+  /// Embedded ingredient manifest boxes copied into the manifest store.
   final List<Uint8List> manifestBoxes;
 
   @override
@@ -289,6 +364,7 @@ final class BuilderIngredient {
 
 /// Immutable input used to construct one v2 C2PA manifest.
 final class ManifestDefinition {
+  /// Creates immutable manifest-building input.
   ManifestDefinition({
     required this.label,
     required this.intent,
@@ -312,22 +388,52 @@ final class ManifestDefinition {
        actions = List<C2paAction>.unmodifiable(actions),
        bmffExclusions = List<BmffHashExclusion>.unmodifiable(bmffExclusions);
 
+  /// Manifest label used under the top-level `c2pa` manifest store.
   final String label;
+
+  /// Creation, edit, or update intent that controls validation rules.
   final BuilderIntent intent;
+
+  /// Claim-generator metadata written into the C2PA claim.
   final ClaimGeneratorInfo generatorInfo;
+
+  /// Human-readable asset title, or `null` when omitted.
   final String? title;
+
+  /// Asset media type claimed by the manifest.
   final String format;
+
+  /// Claim instance ID; must be non-empty during signing.
   final String instanceId;
+
+  /// Assertion hash algorithm name, such as `sha256`.
   final String hashAlgorithm;
+
+  /// Optional `alg_soft` value for soft-binding assertion references.
   final String? softBindingAlgorithm;
+
+  /// Custom assertions appended after generated assertions.
   final List<AssertionDefinition> assertions;
+
+  /// Data-box resources embedded in the manifest store.
   final List<ManifestResource> resources;
+
+  /// JUMBF URIs for ingredient assertions redacted by this claim.
   final List<String> redactions;
+
+  /// Ingredients whose assertions and manifests feed this manifest.
   final List<BuilderIngredient> ingredients;
+
+  /// Additional provenance actions after the generated inception action.
   final List<C2paAction> actions;
+
+  /// Extra ISO BMFF hash exclusions merged with SDK defaults.
   final List<BmffHashExclusion> bmffExclusions;
+
+  /// Optional named BMFF hash assertion variant.
   final String? bmffHashName;
 
+  /// Returns a manifest definition with selected fields replaced.
   ManifestDefinition copyWith({
     String? label,
     BuilderIntent? intent,
@@ -402,7 +508,9 @@ final class ManifestDefinition {
 }
 
 /// Output of a fragmented BMFF signing operation.
+/// Signed initialization segment and fragments for fragmented BMFF.
 final class FragmentedBmffBuildResult {
+  /// Creates immutable fragmented BMFF output bytes.
   FragmentedBmffBuildResult({
     required List<int> initializationSegment,
     required Iterable<List<int>> fragments,
@@ -414,12 +522,18 @@ final class FragmentedBmffBuildResult {
          ),
        );
 
+  /// Initialization segment containing the signed C2PA manifest.
   final Uint8List initializationSegment;
+
+  /// Fragments containing patched Merkle proof UUID boxes.
   final List<Uint8List> fragments;
 }
 
 /// Builds deterministic, signed v2 manifest stores.
 final class C2paBuilder {
+  /// Creates a deterministic manifest builder.
+  ///
+  /// The builder is immutable; `with...` methods return new builders.
   C2paBuilder({
     required this.definition,
     required this.context,
@@ -448,6 +562,7 @@ final class C2paBuilder {
          ),
        );
 
+  /// Loads a builder from a serialized C2PA builder archive.
   static Future<C2paBuilder> fromArchive({
     required List<int> bytes,
     required C2paContext context,
@@ -455,6 +570,7 @@ final class C2paBuilder {
   }) =>
       loadC2paBuilderArchive(bytes: bytes, context: context, options: options);
 
+  /// Creates a builder initialized from a reader's active manifest.
   static Future<C2paBuilder> fromReader({
     required C2paReader reader,
     C2paContext? context,
@@ -467,14 +583,31 @@ final class C2paBuilder {
     x5chain: x5chain,
   );
 
+  /// Immutable manifest definition used by this builder.
   final ManifestDefinition definition;
+
+  /// Context providing signer, settings, trust, and progress hooks.
   final C2paContext context;
+
+  /// Base path stored in builder archives, or `null`.
   final String? archiveBasePath;
+
+  /// Default remote manifest URL for sidecar builds, or `null`.
   final Uri? remoteManifestUrl;
+
+  /// Whether [saveToSource] should prefer sidecar output over embedding.
   final bool noEmbed;
+
+  /// Extension data preserved in builder archives.
   final Map<String, Object?> archiveExtensions;
+
+  /// Dynamic assertions resolved during manifest signing.
   final List<C2paDynamicAssertion> dynamicAssertions;
+
+  /// OCSP responses attached to the COSE signature.
   final List<Uint8List> cachedOcspResponses;
+
+  /// Timestamp configuration, or `null` to sign without a timestamp.
   final C2paTimestampConfig? timestamp;
 
   /// A supported COSE algorithm name such as `ed25519`, `es256`, or `ps256`.
@@ -548,6 +681,9 @@ final class C2paBuilder {
     timestamp: timestamp,
   );
 
+  /// Returns a builder with a dynamic assertion appended.
+  ///
+  /// The callback runs during signing and must fill its reserved size exactly.
   C2paBuilder withDynamicAssertion(C2paDynamicAssertion assertion) =>
       C2paBuilder(
         definition: definition,
@@ -563,6 +699,7 @@ final class C2paBuilder {
         timestamp: timestamp,
       );
 
+  /// Returns a builder with archive and embedding options updated.
   C2paBuilder withArchiveConfiguration({
     String? basePath,
     Uri? remoteManifestUrl,
@@ -582,6 +719,7 @@ final class C2paBuilder {
     timestamp: timestamp,
   );
 
+  /// Returns a builder that timestamps the claim signature when signing.
   C2paBuilder withTimestamp(C2paTimestampConfig timestamp) => C2paBuilder(
     definition: definition,
     context: context,
@@ -596,6 +734,7 @@ final class C2paBuilder {
     timestamp: timestamp,
   );
 
+  /// Returns a builder with cached OCSP responses for the signature.
   C2paBuilder withCachedOcspResponses(Iterable<Uint8List> responses) =>
       C2paBuilder(
         definition: definition,
@@ -611,6 +750,7 @@ final class C2paBuilder {
         timestamp: timestamp,
       );
 
+  /// Returns a builder with timestamping disabled.
   C2paBuilder withoutTimestamp() => C2paBuilder(
     definition: definition,
     context: context,
@@ -624,40 +764,54 @@ final class C2paBuilder {
     cachedOcspResponses: cachedOcspResponses,
   );
 
+  /// Serializes this builder into a C2PA builder archive.
   Uint8List toArchive() => encodeC2paBuilderArchive(this);
 
+  /// Returns a builder with a C2PA metadata assertion appended.
   C2paBuilder withMetadata(C2paMetadataAssertion metadata) =>
       withStandardAssertion(metadata);
 
+  /// Returns a builder with assertion metadata appended.
   C2paBuilder withAssertionMetadata(C2paAssertionMetadata metadata) =>
       withStandardAssertion(metadata);
 
+  /// Returns a builder with a soft-binding assertion appended.
   C2paBuilder withSoftBinding(C2paSoftBindingAssertion softBinding) =>
       withStandardAssertion(softBinding);
 
+  /// Returns a builder with embedded data appended as an assertion.
   C2paBuilder withEmbeddedData(C2paEmbeddedData embeddedData) =>
       withStandardAssertion(embeddedData);
 
+  /// Returns a builder with a thumbnail assertion appended.
   C2paBuilder withThumbnail(C2paThumbnail thumbnail) =>
       withStandardAssertion(thumbnail);
 
+  /// Returns a builder with asset-reference metadata appended.
   C2paBuilder withAssetReferences(C2paAssetReferenceAssertion references) =>
       withStandardAssertion(references);
 
+  /// Returns a builder with asset type metadata appended.
   C2paBuilder withAssetTypes(C2paAssetTypesAssertion assetTypes) =>
       withStandardAssertion(assetTypes);
 
+  /// Returns a builder with a timestamp assertion appended.
   C2paBuilder withTimestampAssertion(C2paTimestampAssertion timestamp) =>
       withStandardAssertion(timestamp);
 
+  /// Returns a builder with certificate-status metadata appended.
   C2paBuilder withCertificateStatus(
     C2paCertificateStatusAssertion certificateStatus,
   ) => withStandardAssertion(certificateStatus);
 
+  /// Returns a builder with a legacy JSON assertion appended.
   C2paBuilder withLegacyAssertion(C2paLegacyJsonAssertion assertion) =>
       withStandardAssertion(assertion);
 
   /// Builds a standalone C2PA manifest store.
+  /// Builds a standalone signed C2PA manifest store.
+  ///
+  /// Throws [C2paSigningException] if signing fails or context lacks a signer.
   Future<Uint8List> build({bool requireValidClaim = false}) async {
     if (definition.intent is UpdateIntent) return _buildManifest(null);
     final boxHash = BoxHashAssertion(
@@ -669,6 +823,9 @@ final class C2paBuilder {
   }
 
   /// Builds a standalone manifest for a caller-supplied collection.
+  /// Builds a standalone manifest bound to [collection].
+  ///
+  /// Throws [C2paValidationException] for update manifests or resource limits.
   Future<Uint8List> buildCollection(C2paCollectionSource collection) async {
     if (definition.intent is UpdateIntent) {
       throw _validationFailure(
@@ -851,6 +1008,9 @@ final class C2paBuilder {
 
   /// Writes standalone output when [source] is absent, otherwise embeds into
   /// a source format using the strongest supported hard-binding layout.
+  /// Writes a standalone manifest or embeds one into [source].
+  ///
+  /// Mutates [output] only after validating it is empty.
   Future<void> saveToSource({
     RandomAccessByteSource? source,
     required WritableByteSink output,
@@ -882,6 +1042,9 @@ final class C2paBuilder {
   ///
   /// URL metadata is applied before hashing so the returned manifest binds the
   /// exact returned asset bytes.
+  /// Builds a sidecar manifest and optional URL-updated asset.
+  ///
+  /// Reads [source] and returns updated asset bytes only when a URL is written.
   Future<C2paSidecarResult> buildSidecar({
     required RandomAccessByteSource source,
     Uri? remoteManifestUrl,
@@ -930,6 +1093,9 @@ final class C2paBuilder {
   }
 
   /// Inserts or updates the asset's provenance URL metadata.
+  /// Inserts or updates the asset's provenance URL metadata.
+  ///
+  /// Throws [C2paValidationException] if the URL is not absolute HTTP(S).
   static Future<Uint8List> updateRemoteManifestReference({
     required RandomAccessByteSource source,
     required Uri remoteManifestUrl,
@@ -957,6 +1123,9 @@ final class C2paBuilder {
   }
 
   /// Removes provenance URL metadata from a capable source format.
+  /// Removes provenance URL metadata from a capable source format.
+  ///
+  /// Throws [C2paFormatException] when the asset handler rejects the format.
   static Future<Uint8List> removeRemoteManifestReference({
     required RandomAccessByteSource source,
     String? mimeType,
@@ -995,6 +1164,9 @@ final class C2paBuilder {
   ///
   /// A Merkle proof UUID box is inserted before each fragment's `moof`, while
   /// the signed manifest is inserted into the initialization segment.
+  /// Signs an ordered fragmented ISO BMFF asset.
+  ///
+  /// Uses reserved-size signing and enforces Merkle placeholder ordering.
   Future<FragmentedBmffBuildResult> buildFragmentedBmff({
     required RandomAccessByteSource initializationSegment,
     required Iterable<RandomAccessByteSource> fragments,

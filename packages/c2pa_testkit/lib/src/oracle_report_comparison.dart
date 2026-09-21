@@ -12,6 +12,7 @@ import 'dart:convert';
 
 /// A single semantic disagreement between the two reports.
 final class OracleReportDifference {
+  /// Creates a semantic report difference for one mismatch kind.
   const OracleReportDifference({
     required this.kind,
     this.items = const [],
@@ -28,7 +29,14 @@ final class OracleReportDifference {
   /// Offending entries, for the set-shaped kinds.
   final List<String> items;
 
+  /// Oracle-side value for structural mismatch kinds.
+  ///
+  /// This is `null` for set-shaped differences that use [items].
   final Object? oracle;
+
+  /// Dart-side value for structural mismatch kinds.
+  ///
+  /// This is `null` for set-shaped differences that use [items].
   final Object? dart;
 
   @override
@@ -40,11 +48,13 @@ final class OracleReportDifference {
 
 /// Outcome of comparing one asset.
 final class OracleReportComparison {
+  /// Creates a comparison result for one asset.
   const OracleReportComparison({
     required this.differences,
     required this.bothRejected,
   });
 
+  /// Semantic differences that should fail conformance unless allowlisted.
   final List<OracleReportDifference> differences;
 
   /// Both implementations refused to produce a report.
@@ -53,6 +63,7 @@ final class OracleReportComparison {
   /// counts as agreement.
   final bool bothRejected;
 
+  /// Whether no scored semantic differences remain.
   bool get agrees => differences.isEmpty;
 }
 

@@ -5,7 +5,9 @@ import 'package:c2pa_io/c2pa_io.dart';
 
 import 'json_utils.dart';
 
+/// Data type descriptor for a collection-hash entry.
 final class CollectionDataType {
+  /// Creates a collection data type descriptor.
   CollectionDataType({
     required this.type,
     this.version,
@@ -16,6 +18,7 @@ final class CollectionDataType {
     }
   }
 
+  /// Decodes a collection data type descriptor from a CBOR map.
   factory CollectionDataType.fromCbor(Object? value) {
     if (value is! Map || value.keys.any((key) => key is! String)) {
       throw const FormatException('Collection data type must be a map');
@@ -32,10 +35,16 @@ final class CollectionDataType {
     );
   }
 
+  /// Non-empty media or semantic type identifier.
   final String type;
+
+  /// Optional non-empty type version, or `null` when unspecified.
   final String? version;
+
+  /// Unrecognized CBOR fields preserved for round-tripping.
   final Map<String, Object?> extra;
 
+  /// Encodes this descriptor as a CBOR-compatible map.
   Map<String, Object?> toCborMap() => {
     ...extra,
     'type': type,
@@ -53,7 +62,9 @@ final class CollectionDataType {
   int get hashCode => Object.hash(type, version, deepHash(extra));
 }
 
+/// Hash metadata for one URI in a collection hard binding.
 final class CollectionHashEntry {
+  /// Creates one collection URI hash entry.
   CollectionHashEntry({
     List<int>? hash,
     this.size,
@@ -76,6 +87,7 @@ final class CollectionHashEntry {
     }
   }
 
+  /// Decodes one collection URI hash entry from a CBOR map.
   factory CollectionHashEntry.fromCbor(Object? value) {
     final map = _strictMap(value, const {
       'hash',
@@ -99,11 +111,21 @@ final class CollectionHashEntry {
     );
   }
 
+  /// Digest bytes for the collection item, or `null` when omitted.
   final Uint8List? hash;
+
+  /// Item byte length, or `null` when the size was not recorded.
   final int? size;
+
+  /// Optional media type stored as `dc:format`.
+  /// Optional media type for the collection item.
   final String? format;
+
+  /// Optional non-empty data-type descriptors for the item.
+  /// Optional data-type descriptors for the collection item.
   final List<CollectionDataType>? dataTypes;
 
+  /// Encodes this entry as a CBOR-compatible map.
   Map<String, Object?> toCborMap() => {
     if (hash != null) 'hash': hash,
     if (size != null) 'size': size,
@@ -127,7 +149,9 @@ final class CollectionHashEntry {
       Object.hash(deepHash(hash), size, format, deepHash(dataTypes));
 }
 
+/// Typed v1 `c2pa.hash.collection.data` hard-binding assertion.
 final class CollectionHashAssertion {
+  /// Creates a collection hash assertion with normalized URI keys.
   CollectionHashAssertion({
     required Map<String, CollectionHashEntry> uris,
     required this.algorithm,
@@ -141,6 +165,7 @@ final class CollectionHashAssertion {
     }
   }
 
+  /// Decodes a collection hash assertion from a CBOR map.
   factory CollectionHashAssertion.fromCbor(Object? value) {
     final map = _strictMap(value, const {
       'uris',
@@ -167,13 +192,22 @@ final class CollectionHashAssertion {
     );
   }
 
+  /// Assertion label for collection data hard bindings.
   static const label = 'c2pa.hash.collection.data';
+
+  /// C2PA collection hash assertion version supported by this type.
   static const version = 1;
 
+  /// Sorted map of normalized relative URIs to hash entries.
   final Map<String, CollectionHashEntry> uris;
+
+  /// Non-empty digest algorithm name stored in `alg`.
   final String algorithm;
+
+  /// Optional digest of a ZIP central directory for ZIP collections.
   final Uint8List? zipCentralDirectoryHash;
 
+  /// Encodes this assertion as a CBOR-compatible map.
   Map<String, Object?> toCborMap() => {
     'uris': {
       for (final entry in uris.entries) entry.key: entry.value.toCborMap(),
@@ -195,7 +229,9 @@ final class CollectionHashAssertion {
       Object.hash(deepHash(uris), algorithm, deepHash(zipCentralDirectoryHash));
 }
 
+/// One item supplied by a [C2paCollectionSource].
 final class C2paCollectionItem {
+  /// Creates a collection item and normalizes its [uri].
   C2paCollectionItem({
     required String uri,
     required this.source,
@@ -206,16 +242,26 @@ final class C2paCollectionItem {
            ? null
            : List<CollectionDataType>.unmodifiable(dataTypes);
 
+  /// Normalized relative URI for the collection item.
   final String uri;
+
+  /// Byte source used to hash the collection item.
   final RandomAccessByteSource source;
+
+  /// Optional media type for the collection item.
   final String? format;
+
+  /// Optional data-type descriptors for the collection item.
   final List<CollectionDataType>? dataTypes;
 }
 
+/// Source of items for a collection data hard binding.
 abstract interface class C2paCollectionSource {
+  /// Loads the collection entries to include in the hard binding.
   Future<Iterable<C2paCollectionItem>> entries();
 }
 
+/// Normalizes a collection URI to a safe relative path.
 String normalizeCollectionUri(String value) {
   if (value.isEmpty || value.contains('\u0000')) {
     throw const FormatException('Collection URI must not be empty');

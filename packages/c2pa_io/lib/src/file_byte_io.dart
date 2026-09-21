@@ -9,6 +9,7 @@ import 'byte_sink.dart';
 import 'file_byte_io_test_hooks.dart';
 import 'random_access_byte_source.dart';
 
+/// A file-backed random-access byte source with stable-length checks.
 final class FileByteSource implements RandomAccessByteSource {
   FileByteSource._(this._file, this._handle, this._snapshotLength);
 
@@ -18,6 +19,7 @@ final class FileByteSource implements RandomAccessByteSource {
   Future<void> _pending = Future.value();
   bool _closed = false;
 
+  /// Opens [path] for random-access reads and snapshots its initial length.
   static Future<FileByteSource> open(String path) async {
     final file = File(path);
     RandomAccessFile? handle;
@@ -76,6 +78,7 @@ final class FileByteSource implements RandomAccessByteSource {
     }
   });
 
+  /// Closes the underlying file handle.
   Future<void> close() => _synchronized(() async {
     if (_closed) return;
     _closed = true;
@@ -178,6 +181,7 @@ final class FileByteSink implements PatchableByteSink {
   _FileFingerprint? _stagingSnapshot;
   bool _cleanupHookInvoked = false;
 
+  /// Opens a staged sink that commits to [path] when [close] succeeds.
   static Future<FileByteSink> open(
     String path, {
     bool overwrite = true,
@@ -261,6 +265,7 @@ final class FileByteSink implements PatchableByteSink {
     }
   });
 
+  /// Truncates the staged output to [length] bytes.
   Future<void> truncate(int length) => _synchronized(() async {
     ByteRange(0, length);
     try {

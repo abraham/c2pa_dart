@@ -19,5 +19,6 @@ linter:
     discarded_futures: true
     no_adjacent_strings_in_list: true
     prefer_final_locals: true
+    public_member_api_docs: true
     unawaited_futures: true
 

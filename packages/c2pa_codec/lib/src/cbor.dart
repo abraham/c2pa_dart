@@ -31,16 +31,23 @@ Object? decodeCbor(
 
 /// A deterministic CBOR encoder and strict decoder.
 final class CborCodec {
+  /// Creates a CBOR codec with deterministic encoding and strict decoding.
   const CborCodec({
     this.maxNestingDepth = 64,
     this.requireCanonicalMapOrder = true,
     this.allowIndefiniteLength = false,
   }) : assert(maxNestingDepth >= 0);
 
+  /// Maximum nested array or map depth accepted by [encode] and [decode].
   final int maxNestingDepth;
+
+  /// Whether decoded maps must use deterministic CBOR key ordering.
   final bool requireCanonicalMapOrder;
+
+  /// Whether indefinite-length strings, arrays, and maps may be decoded.
   final bool allowIndefiniteLength;
 
+  /// Encodes [value] as deterministic, definite-length CBOR.
   Uint8List encode(Object? value) {
     if (maxNestingDepth < 0) {
       throw const CborEncodingException(
@@ -53,6 +60,7 @@ final class CborCodec {
     return output.takeBytes();
   }
 
+  /// Decodes exactly one CBOR data item from [bytes].
   Object? decode(List<int> bytes) {
     if (maxNestingDepth < 0) {
       throw CborDecodingException(

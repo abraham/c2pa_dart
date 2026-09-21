@@ -12,6 +12,11 @@ import '../isobmff_hash_layout.dart';
 import '../xmp.dart';
 import '../xmp_remote_reference.dart';
 
+/// An ISO BMFF handler for C2PA `uuid` boxes.
+///
+/// Handles MP4, QuickTime, M4A, AVIF, HEIF, and HEIC assets. The C2PA
+/// manifest is stored in a top-level `uuid` box with [c2paUuid]; XMP is stored
+/// in a `uuid` box with [xmpUuid].
 final class IsoBmffAssetHandler
     implements
         AssetHandler,
@@ -20,6 +25,7 @@ final class IsoBmffAssetHandler
         IsoBmffHashLayoutProvider,
         XmpMetadataProvider,
         RemoteManifestReferenceProvider {
+  /// Creates a handler for one supported ISO BMFF [format].
   const IsoBmffAssetHandler({
     required this.format,
     this.maxManifestSize = 64 * 1024 * 1024,
@@ -47,6 +53,7 @@ final class IsoBmffAssetHandler
        assert(maxXmpSize > 0),
        assert(maxRemoteReferenceLength > 0);
 
+  /// UUID user type for top-level C2PA manifest boxes.
   static const List<int> c2paUuid = <int>[
     0xd8,
     0xfe,
@@ -65,6 +72,8 @@ final class IsoBmffAssetHandler
     0xc4,
     0x81,
   ];
+
+  /// UUID user type for top-level XMP metadata boxes.
   static const List<int> xmpUuid = <int>[
     0xbe,
     0x7a,
@@ -104,14 +113,31 @@ final class IsoBmffAssetHandler
   };
 
   @override
+  /// The specific ISO BMFF-derived format handled by this instance.
   final AssetFormat format;
+
+  /// Maximum embedded C2PA manifest size in bytes.
   final int maxManifestSize;
+
+  /// Maximum source asset size in bytes.
   final int maxSourceSize;
+
+  /// Maximum rewritten asset size in bytes.
   final int maxOutputSize;
+
+  /// Maximum number of boxes parsed from the asset.
   final int maxBoxCount;
+
+  /// Maximum nested ISO BMFF container-box depth.
   final int maxDepth;
+
+  /// Number of bytes copied per streaming write operation.
   final int copyChunkSize;
+
+  /// Maximum XMP packet size in bytes.
   final int maxXmpSize;
+
+  /// Maximum UTF-8 length of a remote reference in bytes.
   final int maxRemoteReferenceLength;
 
   @override
