@@ -427,17 +427,33 @@ void _scopeAgreementTests() {
   });
 }
 
+/// Path to commitlint's CLI entrypoint, or null if it isn't installed.
+///
+/// This runs `node <cli.js>` directly rather than the npm-generated
+/// `node_modules/.bin/commitlint` shim: on Windows that shim is a `.cmd`
+/// batch file, which `Process.runSync` can only launch via a shell
+/// (`runInShell: true`), and doing so was observed to silently swallow the
+/// `--edit <file>` argument, making every invocation fall back to reading an
+/// empty stdin and rejecting the message regardless of its content.
+/// Invoking the JS entrypoint with `node` sidesteps shims altogether and
+/// behaves identically on every platform.
+String? _commitlintCliPath() {
+  const candidate = 'node_modules/@commitlint/cli/cli.js';
+  return File(candidate).existsSync() ? candidate : null;
+}
+
 /// True when commitlint accepts [message], false when it rejects it.
 ///
 /// Runs the real binary against the real configuration, so these tests fail if
 /// a rule is dropped rather than only if the config literal changes.
-bool _commitlintAccepts(String message) {
+bool _commitlintAccepts(String message, String cliPath) {
   final file = File(
     '${Directory.systemTemp.path}/c2pa_commitlint_${message.hashCode}.txt',
   );
   file.writeAsStringSync('$message\n');
   try {
-    final result = Process.runSync('node_modules/.bin/commitlint', <String>[
+    final result = Process.runSync('node', <String>[
+      cliPath,
       '--edit',
       file.path,
     ]);
@@ -452,7 +468,7 @@ bool _commitlintAccepts(String message) {
 void _commitlintRuleTests() {
   group('commitlint scope rules', () {
     setUpAll(() {
-      if (File('node_modules/.bin/commitlint').existsSync()) {
+      if (_commitlintCliPath() != null) {
         return;
       }
       // Skipping locally is a convenience; skipping in CI would mean these
@@ -465,10 +481,10 @@ void _commitlintRuleTests() {
       }
     });
 
-    bool? accepts(String message) =>
-        File('node_modules/.bin/commitlint').existsSync()
-        ? _commitlintAccepts(message)
-        : null;
+    bool? accepts(String message) {
+      final cliPath = _commitlintCliPath();
+      return cliPath == null ? null : _commitlintAccepts(message, cliPath);
+    }
 
     void expectAccepted(String message) {
       final result = accepts(message);
