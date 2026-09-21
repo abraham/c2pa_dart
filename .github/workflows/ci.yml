@@ -183,10 +183,13 @@ jobs:
         run: dart pub get
       - name: Compile web-safe package barrels
         shell: bash
+        # Every package that claims web support, not just the lower layers:
+        # a dart:io import pulled into the c2pa or c2pa_formats barrel would
+        # otherwise break web consumers with nothing to catch it.
         run: |
-          (cd packages/c2pa_io && dart compile js tool/web_compile_smoke.dart -o .dart_tool/ci/web_compile_smoke.js)
-          (cd packages/c2pa_codec && dart compile js tool/web_compile_smoke.dart -o .dart_tool/ci/web_compile_smoke.js)
-          (cd packages/c2pa_crypto && dart compile js tool/web_compile_smoke.dart -o .dart_tool/ci/web_compile_smoke.js)
+          for package in c2pa_io c2pa_codec c2pa_crypto c2pa_formats c2pa c2pa_testkit; do
+            (cd "packages/$package" && dart compile js tool/web_compile_smoke.dart -o .dart_tool/ci/web_compile_smoke.js)
+          done
       - name: Test browser cryptography
         working-directory: packages/c2pa_crypto
         run: >-

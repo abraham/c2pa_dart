@@ -98,8 +98,39 @@ final builder = C2paBuilder(
 final manifestStore = await builder.build();
 ```
 
+`x5chain` is a `List<Uint8List>` holding one DER certificate per entry, signing
+certificate first, then each issuer. It is not a single concatenated DER blob.
+
 Embedded Data Hash and other fixed-reservation workflows require a
 `C2paReservedSizeSigner` with an exact `reservedSignatureSize`.
+
+### Record ingredients
+
+Ingredients carry the provenance of the assets a new manifest was derived from.
+Reading one validates it, and its manifest store is carried into the new claim:
+
+```dart
+final parent = await BuilderIngredient.fromSource(
+  source: MemoryByteSource(parentBytes),
+  relationship: Relationship.parentOf,
+  fileName: 'parent.jpg',
+  context: C2paContext(),
+);
+
+final definition = ManifestDefinition(
+  label: 'urn:example:derived',
+  intent: const BuilderIntent.create(DigitalSourceType.digitalCapture),
+  generatorInfo: ClaimGeneratorInfo(name: 'example-app', version: '1.0'),
+  format: 'image/jpeg',
+  instanceId: 'xmp:iid:derived',
+  ingredients: [parent],
+);
+```
+
+Use `Relationship.parentOf` for the asset being edited and
+`Relationship.componentOf` for assets composited into it. Validation statuses
+an ingredient already attests are reported as per-ingredient deltas rather than
+being re-attributed to the active manifest.
 
 ### Configure trust explicitly
 
@@ -192,6 +223,32 @@ Future<CawgIdentityValidationResult> validateIdentity({
 CAWG credential trust uses `C2paContext.cawgTrust`; DID web resolution also
 requires a caller-provided resolver and policy.
 
+### Use the command line
+
+`c2patool_dart` exposes the same workflows without writing Dart:
+
+```sh
+dart pub global activate c2patool_dart
+
+c2patool inspect image.jpg --format detailed --pretty
+c2patool validate image.jpg
+c2patool extract image.jpg --manifest-output manifest.c2pa --resources ./out
+c2patool remove image.jpg --output stripped.jpg
+```
+
+The package installs an executable named `c2patool`, which is also the name of
+the reference `c2pa-rs` tool; install only one of them globally, or run this
+one through `dart run c2patool_dart:c2patool`.
+
+`inspect` and `validate` report structural and cryptographic outcomes without
+granting trust, and `validate` additionally exits non-zero when the asset is
+invalid. Signing, archive, remote, and fragmented BMFF workflows are available
+as `sign`, `archive-save`, `archive-load`, `remote`, `replace`,
+`fragment-sign`, and `fragment-inspect`. Run `c2patool <command> --help` for
+each command's options, including the `--trust-anchor`, `--trust-list-file`,
+and bounded `--max-*` resource limits. The CLI never enables network access or
+platform trust implicitly.
+
 ## Compatibility matrix
 
 Statuses match the compatibility ledger: **complete** means the tracked
@@ -206,6 +263,7 @@ exist but baseline parity is not yet claimed.
 | Standard assertions | Complete | Typed standard assertions plus opaque extension preservation |
 | Reader | Complete | Embedded, sidecar, remote, archive, resource, CAWG, fragmented BMFF, and compressed read/validate paths |
 | Builder | Complete | Standalone, sidecar, embedded, collection, fragmented BMFF, archive, dynamic assertion, and timestamp workflows |
+| Ingredients | Complete | Ingredient v1/v2/v3 read, build, validation deltas, and redaction |
 | Compressed manifests | Partial | Bounded Brotli decode/validation is complete; generation is not implemented |
 | Remote manifests | Complete | Opt-in resolver and restrictive policy required |
 | Reports | Complete | SDK JSON, detailed JSON, and crJSON 2.3.0 |
@@ -214,6 +272,7 @@ exist but baseline parity is not yet claimed.
 | CAWG identity | Complete | CAWG 1.1 plus the tracked compatibility mode |
 | Working archives | Complete | Native JUMBF archives and supported legacy imports |
 | CLI | Complete | Inspect, validate, extract, sign, archive, mutation, remote, and fragmented BMFF workflows |
+| Testkit | Complete | Fixtures, mutation campaigns, differential runners, and the c2pa-rs conformance gate |
 
 ### Asset formats
 
@@ -267,7 +326,9 @@ backend and runtime.
 - The VM file sink stages beside its destination and commits with a filesystem
   rename. Replacement atomicity follows the host filesystem and operating
   system semantics.
-- All package barrels have browser compile coverage. ISO BMFF 64-bit offsets
+- Every package barrel that targets the web (`c2pa`, `c2pa_io`, `c2pa_codec`,
+  `c2pa_crypto`, `c2pa_formats`, and `c2pa_testkit`) has browser compile
+  coverage in CI. `c2patool_dart` is a VM-only CLI. ISO BMFF 64-bit offsets
   use checked `BigInt` and byte-level operations so JavaScript precision does
   not alter on-wire values.
 - Actual WebCrypto and browser behavior depends on the deployed browser.
@@ -284,15 +345,15 @@ dart format --output=none --set-exit-if-changed packages tool
 dart analyze
 dart run tool/check_compatibility.dart
 dart run tool/test_all.dart
-(cd packages/c2pa_io && dart compile js tool/web_compile_smoke.dart -o .dart_tool/web-smoke.js)
-(cd packages/c2pa_codec && dart compile js tool/web_compile_smoke.dart -o .dart_tool/web-smoke.js)
-(cd packages/c2pa_crypto && dart compile js tool/web_compile_smoke.dart -o .dart_tool/web-smoke.js)
+for package in c2pa_io c2pa_codec c2pa_crypto c2pa_formats c2pa c2pa_testkit; do
+  (cd "packages/$package" && dart compile js tool/web_compile_smoke.dart -o .dart_tool/web-smoke.js)
+done
 ```
 
-CI runs formatting, analysis, the compatibility ledger, and every package test
-on pinned Dart for Linux, macOS, and Windows. It also runs Chrome tests and
-web-safe package-barrel compiles on Linux, plus a representative Flutter stable
-analysis/test job.
+CI runs four jobs: `dart` (formatting, analysis, the compatibility ledger, and
+every package test on pinned Dart for Linux, macOS, and Windows), `browser`
+(Chrome tests and web-safe barrel compiles), `flutter` (a representative
+Flutter stable analysis/test job), and `c2pa-rs conformance`, described below.
 
 ## Conformance with c2pa-rs
 
@@ -324,10 +385,11 @@ An asset may be exempted through `knownDivergences`, but the gate fails if an
 exempted asset starts agreeing or if an entry matches no asset, so the
 allowlist cannot quietly rot.
 
-The conformance corpus is pinned under
+The `vendored` corpus is checked in under
 `packages/c2pa_testkit/test/fixtures/vendor`. Its `provenance.json` records the
 immutable upstream revision, original path, license, size, and SHA-256 digest
-of every imported file. Upstream private keys are not vendored.
+of every imported file, and the files are never edited in place. Upstream
+private keys are not vendored.
 
 ## License
 
