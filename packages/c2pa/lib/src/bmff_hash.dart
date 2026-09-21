@@ -15,12 +15,13 @@ final class BmffHashDataReplacement {
       'offset',
       'value',
     }, 'data replacement');
-    if (map['offset'] is! int || map['value'] is! Uint8List) {
+    final replacement = cborBytes(map['value']);
+    if (map['offset'] is! int || replacement == null) {
       throw const FormatException('Malformed BMFF data replacement');
     }
     return BmffHashDataReplacement(
       offset: map['offset'] as int,
-      value: map['value'] as Uint8List,
+      value: replacement,
     );
   }
 
@@ -131,7 +132,7 @@ final class BmffHashExclusion {
         (map['data'] != null && map['data'] is! List) ||
         (map['subset'] != null && map['subset'] is! List) ||
         (map['version'] != null && map['version'] is! int) ||
-        (map['flags'] != null && map['flags'] is! Uint8List) ||
+        (map['flags'] != null && cborBytes(map['flags']) == null) ||
         (map['exact'] != null && map['exact'] is! bool)) {
       throw const FormatException('Malformed BMFF exclusion');
     }
@@ -145,7 +146,7 @@ final class BmffHashExclusion {
         BmffHashSubset.fromCbor,
       ),
       version: map['version'] as int?,
-      flags: map['flags'] as Uint8List?,
+      flags: cborBytes(map['flags']),
       exact: map['exact'] as bool?,
     );
   }
@@ -272,7 +273,7 @@ final class MerkleMap {
         map['localId'] is! int ||
         map['count'] is! int ||
         (map['alg'] != null && map['alg'] is! String) ||
-        (map['initHash'] != null && map['initHash'] is! Uint8List) ||
+        (map['initHash'] != null && cborBytes(map['initHash']) == null) ||
         map['hashes'] is! List ||
         (map['fixedBlockSize'] != null && map['fixedBlockSize'] is! int) ||
         (map['variableBlockSizes'] != null &&
@@ -281,7 +282,8 @@ final class MerkleMap {
     }
     final hashes = map['hashes'] as List<Object?>;
     final sizes = map['variableBlockSizes'] as List<Object?>?;
-    if (hashes.any((hash) => hash is! Uint8List) ||
+    final hashValues = hashes.map(cborBytes).toList();
+    if (hashValues.any((hash) => hash == null) ||
         (sizes != null && sizes.any((size) => size is! int))) {
       throw const FormatException('Malformed BMFF Merkle map values');
     }
@@ -290,8 +292,8 @@ final class MerkleMap {
       localId: map['localId'] as int,
       count: map['count'] as int,
       algorithm: map['alg'] as String?,
-      initHash: map['initHash'] as Uint8List?,
-      hashes: hashes.cast<Uint8List>(),
+      initHash: cborBytes(map['initHash']),
+      hashes: hashValues.cast<Uint8List>(),
       fixedBlockSize: map['fixedBlockSize'] as int?,
       variableBlockSizes: sizes?.cast<int>(),
     );
@@ -378,14 +380,15 @@ final class BmffMerkleProof {
       throw const FormatException('Malformed BMFF Merkle proof');
     }
     final hashes = map['hashes'] as List<Object?>?;
-    if (hashes?.any((hash) => hash is! Uint8List) ?? false) {
+    final proofHashes = hashes?.map(cborBytes).toList();
+    if (proofHashes?.any((hash) => hash == null) ?? false) {
       throw const FormatException('Malformed BMFF Merkle proof hashes');
     }
     return BmffMerkleProof(
       uniqueId: map['uniqueId'] as int,
       localId: map['localId'] as int,
       location: map['location'] as int,
-      hashes: hashes?.cast<Uint8List>(),
+      hashes: proofHashes?.cast<Uint8List>(),
     );
   }
 
@@ -451,7 +454,7 @@ final class BmffHashAssertion {
     }, 'assertion');
     if (map['exclusions'] is! List ||
         (map['alg'] != null && map['alg'] is! String) ||
-        (map['hash'] != null && map['hash'] is! Uint8List) ||
+        (map['hash'] != null && cborBytes(map['hash']) == null) ||
         (map['merkle'] != null && map['merkle'] is! List) ||
         (map['name'] != null && map['name'] is! String)) {
       throw const FormatException('Malformed BMFF hash assertion');
@@ -461,7 +464,7 @@ final class BmffHashAssertion {
         BmffHashExclusion.fromCbor,
       ),
       algorithm: map['alg'] as String?,
-      hash: map['hash'] as Uint8List?,
+      hash: cborBytes(map['hash']),
       merkle: (map['merkle'] as List<Object?>?)?.map(MerkleMap.fromCbor),
       name: map['name'] as String?,
     );
@@ -470,6 +473,26 @@ final class BmffHashAssertion {
   static const label = 'c2pa.hash.bmff.v3';
   static const baseLabel = 'c2pa.hash.bmff';
   static const version = 3;
+
+  /// Whether [label] names a BMFF hard binding of any assertion version.
+  ///
+  /// Producers in the wild emit `c2pa.hash.bmff` (v1), `c2pa.hash.bmff.v2`, or
+  /// `c2pa.hash.bmff.v3`, any of which may carry a `__<instance>` suffix.
+  /// Matching only the newest label silently demotes v1 and v2 bindings to
+  /// unknown assertions, which surfaces as a spurious
+  /// `claim.hardBindings.missing` failure.
+  static bool matchesLabel(String label) => versionFromLabel(label) != null;
+
+  /// The assertion version encoded in [label], or `null` if [label] is not a
+  /// BMFF hard binding. An unsuffixed label is version 1.
+  static int? versionFromLabel(String label) {
+    final base = label.split('__').first;
+    if (base == baseLabel) return 1;
+    if (!base.startsWith('$baseLabel.v')) return null;
+    final suffix = base.substring(baseLabel.length + 2);
+    if (suffix.isEmpty) return null;
+    return int.tryParse(suffix);
+  }
 
   final List<BmffHashExclusion> exclusions;
   final String? algorithm;

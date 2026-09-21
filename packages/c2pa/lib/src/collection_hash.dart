@@ -83,14 +83,14 @@ final class CollectionHashEntry {
       'dc:format',
       'data_types',
     }, 'URI entry');
-    if ((map['hash'] != null && map['hash'] is! Uint8List) ||
+    if ((map['hash'] != null && cborBytes(map['hash']) == null) ||
         (map['size'] != null && map['size'] is! int) ||
         (map['dc:format'] != null && map['dc:format'] is! String) ||
         (map['data_types'] != null && map['data_types'] is! List)) {
       throw const FormatException('Malformed collection URI entry');
     }
     return CollectionHashEntry(
-      hash: map['hash'] as Uint8List?,
+      hash: cborBytes(map['hash']),
       size: map['size'] as int?,
       format: map['dc:format'] as String?,
       dataTypes: (map['data_types'] as List<Object?>?)?.map(
@@ -150,7 +150,7 @@ final class CollectionHashAssertion {
     if (map['uris'] is! Map ||
         map['alg'] is! String ||
         (map['zip_central_directory_hash'] != null &&
-            map['zip_central_directory_hash'] is! Uint8List)) {
+            cborBytes(map['zip_central_directory_hash']) == null)) {
       throw const FormatException('Malformed collection hash assertion');
     }
     final rawUris = map['uris'] as Map;
@@ -163,7 +163,7 @@ final class CollectionHashAssertion {
           entry.key as String: CollectionHashEntry.fromCbor(entry.value),
       },
       algorithm: map['alg'] as String,
-      zipCentralDirectoryHash: map['zip_central_directory_hash'] as Uint8List?,
+      zipCentralDirectoryHash: cborBytes(map['zip_central_directory_hash']),
     );
   }
 

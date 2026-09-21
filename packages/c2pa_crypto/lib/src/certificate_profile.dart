@@ -65,6 +65,12 @@ final class CertificateProfileIssue {
 }
 
 /// Validates C2PA signer certificate leaf-profile requirements.
+///
+/// Mirrors `check_certificate_profile` and `CertificateTrustPolicy::
+/// has_allowed_eku` in c2pa-rs v0.90.22. The EKU extension only has to carry
+/// *one* recognised purpose; unrecognised OIDs alongside it are ignored rather
+/// than rejected, which is what lets real-world signers such as Adobe's carry
+/// vendor OIDs next to `id-kp-emailProtection`.
 List<CertificateProfileIssue> validateC2paSignerCertificate(
   X509Certificate certificate, {
   required SigningAlgorithm algorithm,
@@ -82,21 +88,56 @@ List<CertificateProfileIssue> validateC2paSignerCertificate(
   );
   final eku = certificate.extendedKeyUsage;
   if (eku == null || eku.isEmpty) {
+    // c2pa-rs treats an absent EKU extension as acceptable for a CA
+    // certificate (`None => tbscert.is_ca()`), and only as a profile failure
+    // for an end-entity signer.
+    if (certificate.basicConstraints?.isCa != true) {
+      issues.add(
+        const CertificateProfileIssue(
+          CertificateProfileIssueCode.missingExtendedKeyUsage,
+          'A C2PA signer certificate requires an ExtendedKeyUsage extension',
+        ),
+      );
+    }
+  } else if (eku.contains(ExtendedKeyUsageOids.any)) {
     issues.add(
       const CertificateProfileIssue(
-        CertificateProfileIssueCode.missingExtendedKeyUsage,
-        'A C2PA signer certificate requires an ExtendedKeyUsage extension',
+        CertificateProfileIssueCode.disallowedExtendedKeyUsage,
+        'A C2PA signer certificate must not assert the anyExtendedKeyUsage EKU',
       ),
     );
   } else {
-    final disallowed = eku
-        .where((oid) => !allowedExtendedKeyUsageOids.contains(oid))
+    // `id-kp-OCSPSigning` and `id-kp-timeStamping` identify OCSP responders
+    // and time-stamping authorities, which this SDK validates through
+    // [validateOcspResponderCertificate] and [validateTsaCertificate]. A claim
+    // signer must not assert either purpose.
+    //
+    // This is deliberately stricter than c2pa-rs, whose `has_allowed_eku`
+    // accepts a signer whose only purpose is time-stamping or OCSP signing.
+    // Rejecting a cross-purpose credential can only reject a certificate the
+    // C2PA specification already disallows, whereas matching upstream here
+    // would admit one. A caller that deliberately lists one of these OIDs in
+    // [allowedExtendedKeyUsageOids] opts back into the upstream behaviour.
+    final crossPurpose = eku
+        .where(
+          (oid) =>
+              !allowedExtendedKeyUsageOids.contains(oid) &&
+              (oid == ExtendedKeyUsageOids.ocspSigning ||
+                  oid == ExtendedKeyUsageOids.timeStamping),
+        )
         .toList();
-    if (disallowed.isNotEmpty) {
+    if (crossPurpose.isNotEmpty) {
       issues.add(
         CertificateProfileIssue(
           CertificateProfileIssueCode.disallowedExtendedKeyUsage,
-          'Disallowed signer EKU values: ${disallowed.join(', ')}',
+          'Disallowed signer EKU values: ${crossPurpose.join(', ')}',
+        ),
+      );
+    } else if (!eku.any(allowedExtendedKeyUsageOids.contains)) {
+      issues.add(
+        CertificateProfileIssue(
+          CertificateProfileIssueCode.missingExtendedKeyUsage,
+          'No recognised signer EKU among: ${eku.join(', ')}',
         ),
       );
     }

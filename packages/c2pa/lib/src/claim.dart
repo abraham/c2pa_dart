@@ -15,12 +15,12 @@ final class ClaimHashedUri {
   factory ClaimHashedUri.fromCbor(Object? value) {
     final map = _stringMap(value, 'hashed URI');
     final url = map['url'];
-    final hash = map['hash'];
+    final hash = cborBytes(map['hash']);
     final algorithm = map['alg'];
     if (url is! String || url.isEmpty) {
       throw const FormatException('A hashed URI requires a non-empty url');
     }
-    if (hash is! Uint8List || hash.isEmpty) {
+    if (hash == null || hash.isEmpty) {
       throw const FormatException('A hashed URI requires a byte-string hash');
     }
     if (algorithm != null && algorithm is! String) {

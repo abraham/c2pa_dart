@@ -312,20 +312,21 @@ final class CawgIdentityAssertion {
   factory CawgIdentityAssertion.fromCbor(Object? value) {
     final map = _stringMap(value, 'CAWG identity assertion');
     final signerPayload = map['signer_payload'];
-    final signature = map['signature'];
-    final pad1 = map['pad1'];
-    final pad2 = map['pad2'];
+    final signature = cborBytes(map['signature']);
+    final pad1 = cborBytes(map['pad1']);
+    final rawPad2 = map['pad2'];
+    final pad2 = cborBytes(rawPad2);
     if (signerPayload == null ||
-        signature is! Uint8List ||
-        pad1 is! Uint8List ||
-        (pad2 != null && pad2 is! Uint8List)) {
+        signature == null ||
+        pad1 == null ||
+        (rawPad2 != null && pad2 == null)) {
       throw const FormatException('Malformed CAWG identity assertion');
     }
     return CawgIdentityAssertion(
       signerPayload: CawgSignerPayload.fromCbor(signerPayload),
       signature: signature,
       pad1: pad1,
-      pad2: pad2 as Uint8List?,
+      pad2: pad2,
       unknownFields: unknownFieldsOf(map, const {
         'signer_payload',
         'signature',
@@ -506,10 +507,18 @@ final class CawgIdentityValidator {
         statuses.addAll(verification.statuses);
         credential = verification.credentialSummary;
       default:
-        failed(
-          CawgStatusCodes.signatureTypeUnknown,
-          'Unknown CAWG signature type '
-          '${assertion.signerPayload.signatureType}',
+        // c2pa-rs v0.90.22 skips identity assertions whose signature type it
+        // does not recognize rather than invalidating the manifest, so this is
+        // reported without failing the verdict.
+        statuses.add(
+          CawgValidationStatus(
+            code: CawgStatusCodes.signatureTypeUnknown,
+            severity: CawgStatusSeverity.informational,
+            url: assertionLabel,
+            explanation:
+                'Unknown CAWG signature type '
+                '${assertion.signerPayload.signatureType}',
+          ),
         );
     }
     if (context.cawgIcaCompatibility != CawgIcaCompatibility.c2paRs09022 &&
@@ -751,8 +760,8 @@ final class CawgX509CoseVerifier {
       }
       return CawgX509Verification(statuses, {
         'type': CawgIdentityLabels.x509Cose,
-        'subject': leaf.subject.toString(),
-        'issuer': leaf.issuer.toString(),
+        'subject': _distinguishedNameText(leaf.subject),
+        'issuer': _distinguishedNameText(leaf.issuer),
         'algorithm': algorithm.name,
         'trusted': trusted,
       });
@@ -1599,7 +1608,7 @@ final class CawgIcaVerifier {
       }
       return CawgX509Verification(statuses, {
         'type': CawgIdentityLabels.identityClaimsAggregation,
-        'issuer': credential.issuer.id,
+        'issuer': credential.issuer.id.toString(),
         'verifiedIdentities': credential.verifiedIdentities
             .map(_verifiedIdentitySummary)
             .toList(growable: false),
@@ -2020,6 +2029,22 @@ SimplePublicKey _publicJwkKey(Map<String, Object?> jwk) {
   return SimplePublicKey(bytes, type: KeyPairType.ed25519);
 }
 
+/// Renders a distinguished name for display, preferring the organization then
+/// the common name, matching how signer names are surfaced elsewhere.
+String _distinguishedNameText(X509DistinguishedName name) {
+  String? attribute(String oid) {
+    for (final entry in name.attributes.reversed) {
+      if (entry.oid == oid) return entry.value;
+    }
+    return null;
+  }
+
+  return attribute('2.5.4.10') ??
+      attribute('2.5.4.3') ??
+      name.attributes.lastOrNull?.value ??
+      '';
+}
+
 Uri _didWebUri(String did) {
   final segments = did.substring('did:web:'.length).split(':');
   if (segments.isEmpty || segments.first.isEmpty) {
@@ -2060,7 +2085,10 @@ Map<String, Object?> _verifiedIdentitySummary(CawgVerifiedIdentity identity) =>
       'address': ?identity.address,
       'uri': ?identity.uri?.toString(),
       'verifiedAt': identity.verifiedAt.toIso8601String(),
-      'provider': {'id': identity.provider.id, 'name': identity.provider.name},
+      'provider': {
+        'id': identity.provider.id.toString(),
+        'name': identity.provider.name,
+      },
     };
 
 bool _icaAssetMatches(

@@ -466,6 +466,17 @@ final class _PathBuilder {
       }).toList();
     }
     issuers.sort((left, right) => _compareBytes(left.der, right.der));
+    // A self-issued certificate is its own issuer candidate. It terminates the
+    // path rather than extending it: if it were a configured trust anchor the
+    // walk would already have stopped above, so reaching here means the chain
+    // ends at an anchor this policy does not trust. Treating that as a cycle
+    // reported `loopDetected`, which marks the whole path invalid instead of
+    // merely untrusted — enough to make callers discard an otherwise valid
+    // RFC 3161 timestamp whose TSA ships its own root in the CMS certificate
+    // set. Genuine multi-certificate cycles are still caught below.
+    issuers = issuers
+        .where((candidate) => !_equalBytes(candidate.der, current.der))
+        .toList();
     if (issuers.isEmpty) {
       issues.add(
         CertificatePathIssue(

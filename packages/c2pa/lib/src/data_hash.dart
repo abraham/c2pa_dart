@@ -64,15 +64,16 @@ final class DataHashAssertion {
     final exclusions = value['exclusions'];
     final name = value['name'];
     final algorithm = value['alg'];
-    final hash = value['hash'];
-    final pad = value['pad'];
-    final pad2 = value['pad2'];
+    final hash = cborBytes(value['hash']);
+    final pad = cborBytes(value['pad']);
+    final rawPad2 = value['pad2'];
+    final pad2 = cborBytes(rawPad2);
     if ((exclusions != null && exclusions is! List) ||
         (name != null && name is! String) ||
         (algorithm != null && algorithm is! String) ||
-        hash is! Uint8List ||
-        pad is! Uint8List ||
-        (pad2 != null && pad2 is! Uint8List)) {
+        hash == null ||
+        pad == null ||
+        (rawPad2 != null && pad2 == null)) {
       throw const FormatException('Malformed DataHash assertion');
     }
     final exclusionList = exclusions as List?;
@@ -82,7 +83,7 @@ final class DataHashAssertion {
       algorithm: algorithm as String?,
       hash: hash,
       pad: pad,
-      pad2: pad2 as Uint8List?,
+      pad2: pad2,
     );
   }
 

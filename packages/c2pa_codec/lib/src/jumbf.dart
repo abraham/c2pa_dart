@@ -429,10 +429,17 @@ final class JumbfUnknownNode extends JumbfPayloadNode {
 }
 
 /// Strictly parses one standalone JUMBF superbox.
+/// Parses a JUMBF superbox from [bytes].
+///
+/// Set [allowTrailingData] when the caller received a container payload that
+/// may be padded after the superbox — c2pa-rs reads the store with
+/// `BoxReader::read_super_box` over a cursor and never requires the buffer to
+/// be exhausted, and BMFF producers do emit such padding.
 JumbfSuperBoxNode parseJumbf(
   List<int> bytes, {
   int maxNestingDepth = 64,
   int maxBoxCount = 10000,
+  bool allowTrailingData = false,
 }) {
   if (maxNestingDepth < 0 || maxBoxCount < 1) {
     throw const JumbfException(
@@ -447,7 +454,7 @@ JumbfSuperBoxNode parseJumbf(
     maxBoxCount: maxBoxCount,
   );
   final result = state.parseSuperBox(0, input.length, 0);
-  if (result.$2 != input.length) {
+  if (!allowTrailingData && result.$2 != input.length) {
     throw JumbfException(
       JumbfErrorCode.trailingData,
       'Trailing data follows the JUMBF superbox',

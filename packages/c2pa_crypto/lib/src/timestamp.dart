@@ -153,15 +153,8 @@ final class CmsTimestampToken {
     final digestSet = signedDataReader.read(0x31);
     final digestReader = digestSet.reader();
     final declaredDigests = <HashAlgorithm>{};
-    List<int>? previousDigest;
     while (!digestReader.isAtEnd) {
       final digestElement = digestReader.read(0x30);
-      _requireSetOrder(
-        previousDigest,
-        digestElement.encoded,
-        'digestAlgorithms',
-      );
-      previousDigest = digestElement.encoded;
       final digest = _parseHashAlgorithm(
         _parseAlgorithmIdentifier(digestElement),
       );
@@ -189,16 +182,15 @@ final class CmsTimestampToken {
 
     final certificates = <X509Certificate>[];
     if (!signedDataReader.isAtEnd && signedDataReader.peekTag() == 0xa0) {
+      // The CertificateSet is an unauthenticated bag: it is not covered by the
+      // signature, and the signer is located by issuer and serial number from
+      // SignerInfo rather than by position. DER SET-OF ordering therefore
+      // carries no security meaning here, while real timestamp authorities
+      // routinely emit the chain in leaf-to-root order. Enforcing the ordering
+      // rejected otherwise valid tokens.
       final certificateSet = signedDataReader.read(0xa0).reader();
-      List<int>? previousCertificate;
       while (!certificateSet.isAtEnd) {
         final certificateDer = certificateSet.read(0x30).encoded;
-        _requireSetOrder(
-          previousCertificate,
-          certificateDer,
-          'certificate set',
-        );
-        previousCertificate = certificateDer;
         certificates.add(
           X509Certificate.parse(
             certificateDer,
@@ -632,30 +624,20 @@ void _validateUnsignedAttributes(_DerElement attributes) {
   if (reader.isAtEnd) {
     throw const FormatException('CMS unsigned attributes must not be empty');
   }
-  List<int>? previous;
+  // Unsigned attributes are not covered by the signature, so their SET-OF
+  // ordering is not security relevant and is not enforced here.
   while (!reader.isAtEnd) {
     final attribute = reader.read(0x30);
-    _requireSetOrder(previous, attribute.encoded, 'unsigned attributes');
-    previous = attribute.encoded;
     final attributeReader = attribute.reader();
     _decodeOid(attributeReader.read(0x06).content);
     final values = attributeReader.read(0x31).reader();
     if (values.isAtEnd) {
       throw const FormatException('CMS attribute values must not be empty');
     }
-    List<int>? previousValue;
     while (!values.isAtEnd) {
-      final value = values.read();
-      _requireSetOrder(previousValue, value.encoded, 'attribute values');
-      previousValue = value.encoded;
+      values.read();
     }
     attributeReader.requireEnd();
-  }
-}
-
-void _requireSetOrder(List<int>? previous, List<int> current, String field) {
-  if (previous != null && _compareBytes(previous, current) >= 0) {
-    throw FormatException('CMS $field is not in canonical DER order');
   }
 }
 

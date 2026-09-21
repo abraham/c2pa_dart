@@ -34,7 +34,7 @@ void main() {
       ),
     ]) {
       test(
-        '${fixture.name} preserves status mismatches in comparison',
+        '${fixture.name} reproduces the upstream SDK report exactly',
         () async {
           final reader = await _read(fixture.asset);
           final oracle = await loadGoldenJsonObject(
@@ -74,41 +74,43 @@ void main() {
             contains(fixture.dataHashCode),
           );
 
-          // These are real interoperability differences, not ignored fields:
-          // Dart reports additional accessibility/credential checks, cannot
-          // validate this fixture's timestamp, and classifies the ingredient
-          // without provenance differently from c2pa-rs 0.90.22.
-          expect(comparison.matches, isFalse);
+          // The golden files are byte-exact copies of the c2pa-rs v0.90.22
+          // `sdk/tests/known_good` fixtures. This SDK now reproduces them
+          // exactly — same codes, same buckets, same URLs, same ingredient
+          // deltas — so the comparison is asserted whole rather than
+          // field-by-field. Any future divergence fails here with a diff.
+          expect(
+            comparison.matches,
+            isTrue,
+            reason:
+                '${fixture.name} diverges from the upstream golden at: '
+                '${comparison.differences.map((d) => d.path).join(', ')}',
+          );
+
+          // Spot-checks for the conditions that used to diverge, kept so a
+          // regression names the cause instead of only the path.
           expect(
             dart['validationCodes'] as List<Object?>,
-            containsAll([
-              'assertion.accessible',
-              'signingCredential.ocsp.skipped',
-              'signingCredential.untrusted',
-              'timeStamp.malformed',
-            ]),
+            containsAll(['timeStamp.validated', 'timeStamp.untrusted']),
           );
           expect(
-            expected['validationCodes'] as List<Object?>,
-            containsAll(['timeStamp.untrusted', 'timeStamp.validated']),
+            dart['validationCodes'] as List<Object?>,
+            isNot(contains('timeStamp.malformed')),
           );
+          // The goldens were produced with trust verification off, where
+          // c2pa-rs selects `Verifier::VerifyCertificateProfileOnly` and logs
+          // no trust status at all.
           expect(
-            comparison.differences.map((difference) => difference.path),
-            everyElement(
+            dart['validationCodes'] as List<Object?>,
+            isNot(
               anyOf(
-                startsWith(r'$.ingredientDeltas'),
-                startsWith(r'$.validationCategories'),
-                startsWith(r'$.validationCodes'),
-                startsWith(r'$.validationUrls'),
+                contains('signingCredential.untrusted'),
+                contains('signingCredential.trusted'),
               ),
             ),
           );
           expect(
             jsonEncode(dart['ingredientDeltas']),
-            contains('ingredient.manifest.missing'),
-          );
-          expect(
-            jsonEncode(expected['ingredientDeltas']),
             contains('ingredient.unknownProvenance'),
           );
         },

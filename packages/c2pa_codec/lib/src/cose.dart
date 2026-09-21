@@ -427,6 +427,13 @@ Object? _decodeCborSlice(
     return decodeCbor(
       Uint8List.fromList(input.sublist(start, end)),
       maxNestingDepth: maxNestingDepth,
+      // COSE structures are verified against the exact bytes the signer
+      // produced, so map key ordering carries no security meaning here.
+      // Real-world C2PA signers emit non-canonically ordered header maps, and
+      // rejecting them at decode time would discard otherwise valid
+      // signatures. Deterministic ordering remains enforced where C2PA
+      // requires it, namely claim encoding.
+      requireCanonicalMapOrder: false,
     );
   } on CborDecodingException catch (error) {
     throw CoseException(

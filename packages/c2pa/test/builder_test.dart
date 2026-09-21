@@ -620,7 +620,7 @@ void main() {
       }
     });
 
-    test('reports malformed and additional DataHash exclusions', () async {
+    test('reports mismatched and additional DataHash exclusions', () async {
       final output = MemoryByteSink();
       await _builder(
         _definition(),
@@ -638,9 +638,13 @@ void main() {
         first['length'] = 0;
         value['exclusions'] = [first];
       });
+      // `hash_stream_by_alg_with_progress` skips zero-length exclusions
+      // (`if exclusion.length() == 0 { continue; }`) rather than rejecting
+      // them, so the manifest bytes get hashed and the digest simply fails to
+      // match. A zero-length range is not a malformed assertion upstream.
       expect(
         _codes(await _readWebp(malformed)),
-        contains(ValidationCode.assertionDataHashMalformed.value),
+        contains(ValidationCode.assertionDataHashMismatch.value),
       );
 
       final additional = await _rewriteEmbeddedDataHash(output.toBytes(), (

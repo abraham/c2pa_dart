@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:c2pa_codec/c2pa_codec.dart';
 
+import 'actions.dart';
 import 'claim.dart';
 import 'compressed_manifest.dart';
 import 'ingredient.dart';
@@ -62,10 +63,11 @@ final class _ReportExporter {
 
   static const _crJsonVersion = '2.3.0';
   static const _generatorVersion = '0.1.0-dev.1';
+  // c2pa-rs omits these hard bindings from a manifest's public assertion list
+  // but deliberately keeps `c2pa.hash.bmff`, which stays visible to callers.
   static const _hardBindingLabels = {
     'c2pa.hash.boxes',
     'c2pa.hash.data',
-    'c2pa.hash.bmff',
     'c2pa.hash.collection.data',
   };
 
@@ -86,7 +88,7 @@ final class _ReportExporter {
             .map((issue) => issue.toJson())
             .toList(growable: false),
       'validation_results': reader.validationResults.toJson(),
-      'validation_state': reader.validationResults.state.name,
+      'validation_state': _sdkValidationState(reader.validationResults.state),
     });
   }
 
@@ -100,7 +102,7 @@ final class _ReportExporter {
         'active_manifest': reader.activeManifestLabel,
       'manifests': manifests,
       'validation_results': reader.validationResults.toJson(),
-      'validation_state': reader.validationResults.state.name,
+      'validation_state': _sdkValidationState(reader.validationResults.state),
       'raw_manifest_store': _binary(reader.manifestBytes),
       'raw_manifest_entries': reader.rawManifestEntries
           .map(
@@ -150,8 +152,9 @@ final class _ReportExporter {
         _jsonValue(assertion.value),
       );
       publicAssertions.add({
-        'label': _sdkAssertionLabel(assertion.label, data),
-        if (assertion.instance > 1) 'instance': assertion.instance,
+        'label': _sdkAssertionLabel(assertion.label),
+        if (_labelInstance(assertion.label) > 0)
+          'instance': _labelInstance(assertion.label),
         'data': data,
         if (assertion.kind == 'json') 'kind': 'Json',
       });
@@ -661,19 +664,28 @@ final class _ReportExporter {
 
   static bool _isThumbnail(String label) => label.startsWith('c2pa.thumbnail.');
 
-  static String _sdkAssertionLabel(String label, Object? value) {
-    if (label != 'c2pa.actions' || value is! Map) return label;
-    final actions = value['actions'];
-    if (actions is! List) return label;
-    final usesV2Parameters = actions.whereType<Map<Object?, Object?>>().any((
-      action,
-    ) {
-      final parameters = action['parameters'];
-      return parameters is Map &&
-          (parameters.containsKey('ingredient') ||
-              parameters.containsKey('ingredients'));
-    });
-    return usesV2Parameters ? 'c2pa.actions.v2' : label;
+  /// The instance number encoded in an assertion label's `__<n>` suffix.
+  ///
+  /// C2PA numbers repeated assertions from zero, so an unsuffixed label is
+  /// instance 0 and `c2pa.soft-binding__1` is instance 1. This is a property
+  /// of the label itself, not a count of how many times a label was seen.
+  static int _labelInstance(String label) {
+    final index = label.indexOf('__');
+    if (index < 0) return 0;
+    return int.tryParse(label.substring(index + 2)) ?? 0;
+  }
+
+  /// Maps an on-disk assertion label to the label c2pa-rs reports.
+  ///
+  /// c2pa-rs emits the typed assertion's declared version rather than the
+  /// label carried in the JUMBF box, so an on-disk `c2pa.actions` surfaces as
+  /// `c2pa.actions.v2` regardless of claim version or action contents. The
+  /// `__<instance>` suffix is reported separately and is stripped here.
+  static String _sdkAssertionLabel(String label) {
+    final base = label.split('__').first;
+    return base == ActionsAssertion.label
+        ? ActionsAssertion.versionedLabel
+        : base;
   }
 
   static Object? _sdkAssertionValue(String label, Object? value) {
@@ -752,6 +764,14 @@ String _uniqueKey(Map<String, Object?> values, String label) {
   }
   return '${label}__$instance';
 }
+
+/// c2pa-rs serialises `ValidationState` using its Rust variant names, so the
+/// SDK-shaped report spells these capitalised rather than lower-case.
+String _sdkValidationState(ValidationState state) => switch (state) {
+  ValidationState.invalid => 'Invalid',
+  ValidationState.valid => 'Valid',
+  ValidationState.trusted => 'Trusted',
+};
 
 String _absoluteJumbfUrl(String manifestLabel, String value) {
   if (!value.startsWith('self#jumbf=')) return value;

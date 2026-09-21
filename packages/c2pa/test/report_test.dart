@@ -15,7 +15,7 @@ void main() {
       final manifest = _manifestFrom(report);
 
       expect(report['active_manifest'], 'urn:c2pa:test');
-      expect(report['validation_state'], 'invalid');
+      expect(report['validation_state'], 'Invalid');
       expect(manifest['claim_version'], 1);
       expect(manifest['claim_generator'], 'report-test/1.0');
       expect(manifest['title'], 'Report asset');

@@ -19,6 +19,7 @@ import 'context.dart';
 import 'data_hash.dart';
 import 'exceptions.dart';
 import 'ingredient.dart';
+import 'intent.dart';
 import 'json_utils.dart';
 import 'manifest.dart';
 import 'remote_manifest.dart';
@@ -69,6 +70,7 @@ final class C2paManifestEntry {
     Iterable<C2paResource> resources = const [],
     this.compression = C2paManifestCompression.none,
     this.claim,
+    this.claimBytes,
     this.signatureInfo,
   }) : bytes = Uint8List.fromList(bytes).asUnmodifiableView(),
        logicalBytes = Uint8List.fromList(logicalBytes ?? bytes)
@@ -97,6 +99,12 @@ final class C2paManifestEntry {
   final Uint8List bytes;
   final Uint8List logicalBytes;
   final C2paManifestCompression compression;
+
+  /// Raw CBOR bytes of the claim box, as stored in the asset.
+  ///
+  /// c2pa-rs keeps the equivalent as `Claim::original_bytes` and hashes it for
+  /// the pre-1.3 ingredient reference form.
+  final Uint8List? claimBytes;
   bool get isCompressed => compression == C2paManifestCompression.brotli;
   int get storedSize => bytes.length;
   int get logicalSize => logicalBytes.length;
@@ -153,11 +161,59 @@ final class C2paManifestEntry {
         standardAssertions.whereType<C2paLegacyJsonAssertion>(),
       );
 
-  List<ValidationIssue> get validationIssues =>
+  /// CAWG identity validation statuses projected onto the C2PA status model.
+  ///
+  /// These participate in the manifest verdict; without them an asset carrying
+  /// an invalid identity assertion would validate as if the assertion were
+  /// absent.
+  List<ValidationIssue> get identityIssues =>
       List<ValidationIssue>.unmodifiable([
-        ...structuralIssues,
-        ...cryptographicIssues,
+        for (final result in identityAssertions)
+          for (final status in result.statuses)
+            ValidationIssue.withSeverity(
+              code: status.code,
+              severity: switch (status.severity) {
+                CawgStatusSeverity.success => ValidationSeverity.success,
+                CawgStatusSeverity.informational =>
+                  ValidationSeverity.informational,
+                CawgStatusSeverity.failure => ValidationSeverity.failure,
+              },
+              url: _identityStatusUrl(status.url ?? result.assertionLabel),
+              explanation: status.explanation,
+            ),
       ]);
+
+  static String _identityStatusUrl(String value) =>
+      value.startsWith('self#jumbf=')
+      ? value
+      : 'self#jumbf=c2pa.assertions/$value';
+
+  List<ValidationIssue> get validationIssues =>
+      List<ValidationIssue>.unmodifiable(
+        [
+          ...structuralIssues,
+          ...cryptographicIssues,
+          ...identityIssues,
+        ].map(_absoluteIssueUrl),
+      );
+
+  /// c2pa-rs reports every status URL in absolute JUMBF form. Validators emit
+  /// references as they appear inside the claim, which are usually relative to
+  /// the manifest, so resolve them against this manifest's label.
+  ValidationIssue _absoluteIssueUrl(ValidationIssue issue) {
+    final url = issue.url;
+    if (url == null || !url.startsWith('self#jumbf=')) return issue;
+    var path = url.substring('self#jumbf='.length);
+    if (path.startsWith('/c2pa/')) return issue;
+    if (!path.startsWith('/')) path = '/$path';
+    return ValidationIssue.withSeverity(
+      code: issue.code,
+      severity: issue.severity,
+      url: 'self#jumbf=/c2pa/$label$path',
+      explanation: issue.explanation,
+      ingredientUri: issue.ingredientUri,
+    );
+  }
 }
 
 /// Read-only structural view of an embedded or standalone C2PA manifest store.
@@ -308,6 +364,7 @@ final class C2paReader {
         manifestBytes,
         maxNestingDepth: settings.maxRecursionDepth,
         maxBoxCount: settings.maxJumbfBoxCount,
+        allowTrailingData: true,
       );
     } on JumbfException catch (error, stackTrace) {
       throw C2paParseException(
@@ -614,8 +671,9 @@ final class C2paReader {
     }
 
     Claim? claim;
+    Uint8List? claimPayload;
     if (claimBoxes.length == 1) {
-      final claimPayload = _singleCborPayload(claimBoxes.single);
+      claimPayload = _singleCborPayload(claimBoxes.single);
       if (claimPayload == null) {
         issues.add(_issue(ValidationCode.claimMalformed, label));
       } else {
@@ -753,10 +811,15 @@ final class C2paReader {
         .map((ingredient) => ingredient.instanceId)
         .whereType<String>()
         .toSet();
+    // c2pa-rs (claim.rs:2164-2167) returns from `verify_actions` before any of
+    // these rules when the claim is v1, unless strict v1 validation is opted
+    // into — which is off by default. Legacy producers routinely reference an
+    // ingredient by an `instanceId` that no ingredient assertion declares.
+    final verifyActionRules = claim != null && claim.version != ClaimVersion.v1;
     for (final actionAssertion in actions) {
       for (final action in actionAssertion.actions) {
         for (final id in action.parameters?.ingredientIds ?? const <String>[]) {
-          if (!ingredientIds.contains(id)) {
+          if (verifyActionRules && !ingredientIds.contains(id)) {
             issues.add(
               ValidationIssue.known(
                 code: ValidationCode.assertionActionIngredientMismatch,
@@ -772,8 +835,7 @@ final class C2paReader {
               final assertionLabel = node.label ?? '';
               return assertionLabel == DataHashAssertion.label ||
                   assertionLabel.startsWith('${DataHashAssertion.label}__') ||
-                  assertionLabel == BmffHashAssertion.label ||
-                  assertionLabel.startsWith('${BmffHashAssertion.label}__') ||
+                  BmffHashAssertion.matchesLabel(assertionLabel) ||
                   assertionLabel == CollectionHashAssertion.label ||
                   assertionLabel.startsWith(
                     '${CollectionHashAssertion.label}__',
@@ -868,6 +930,7 @@ final class C2paReader {
       logicalBytes: node.rawBytes,
       compression: compression,
       claim: claim,
+      claimBytes: claimPayload,
       signatureBytes: signatureBytes,
       assertions: assertions,
       unknownBoxes: unknown,
@@ -984,6 +1047,57 @@ final class C2paReader {
     return path == null || path.isEmpty ? uri : path.last;
   }
 
+  /// Identity used by `impl PartialEq for ValidationStatus`: code, URL and
+  /// log kind, deliberately excluding the human-readable explanation.
+  static String _statusIdentity(ValidationIssue issue) =>
+      '${issue.code}|${issue.url ?? ''}|${issue.severity.name}';
+
+  static String? _manifestLabelFromUri(String? uri) {
+    if (uri == null) return null;
+    final path = _jumbfPath(uri);
+    if (path == null || path.length < 2 || path.first != 'c2pa') return null;
+    return path[1];
+  }
+
+  /// Collects every validation status that an ingredient assertion anywhere in
+  /// the store already attests, in the normalised form c2pa-rs compares
+  /// against in `ValidationResults::from_store`.
+  ///
+  /// c2pa-rs prefers the ingredient's `validationResults` and falls back to the
+  /// legacy `validationStatus` list, then re-derives each status kind from the
+  /// code because `kind` is `#[serde(skip)]` and therefore never survives
+  /// serialization into the assertion. Relative URLs are resolved against the
+  /// manifest the ingredient points at, not the manifest holding the assertion.
+  static Set<String> _attestedIngredientStatusKeys(
+    Map<String, C2paManifestEntry> manifests,
+  ) {
+    final keys = <String>{};
+    for (final entry in manifests.values) {
+      for (final ingredient in entry.ingredients) {
+        final attested =
+            ingredient.validationResults?.issues ?? ingredient.validationStatus;
+        if (attested == null) continue;
+        final target = ingredient.activeManifest ?? ingredient.c2paManifest;
+        final label = _manifestLabelFromUri(target?.url);
+        for (final issue in attested) {
+          var url = issue.url;
+          if (label != null && url != null && url.startsWith('self#jumbf=')) {
+            var path = url.substring('self#jumbf='.length);
+            if (!path.startsWith('/c2pa/')) {
+              if (!path.startsWith('/')) path = '/$path';
+              url = 'self#jumbf=/c2pa/$label$path';
+            }
+          }
+          keys.add(
+            '${issue.code}|${url ?? ''}|'
+            '${ValidationCode.classify(issue.code).name}',
+          );
+        }
+      }
+    }
+    return keys;
+  }
+
   static Future<ValidationResults> _structuralResults(
     Map<String, C2paManifestEntry> manifests,
     String? activeLabel,
@@ -999,9 +1113,21 @@ final class C2paReader {
 
     final active = manifests[activeLabel]!;
     final ingredientDeltas = <IngredientDeltaValidationResult>[];
-    final reachedLabels = <String>{};
-    final referencedLabels = <String>{};
+    final unresolvedManifestLabels = <String>{};
+    final attestedStatusKeys = _attestedIngredientStatusKeys(manifests);
     var ingredientCount = 0;
+
+    /// Mirrors the `statuses.retain(..)` pass in
+    /// `ValidationResults::from_store`. A status is dropped only when it is a
+    /// genuine re-report of something an ingredient assertion already attested,
+    /// which is what makes these results *deltas*. Anything describing the
+    /// active manifest is kept unconditionally so an attacker-authored
+    /// ingredient assertion cannot cancel a genuine active-manifest failure.
+    bool isDelta(ValidationIssue issue) {
+      if (issue.ingredientUri == null) return true;
+      if (_manifestLabelFromUri(issue.url) == activeLabel) return true;
+      return !attestedStatusKeys.contains(_statusIdentity(issue));
+    }
 
     Future<void> visit(
       C2paManifestEntry owner,
@@ -1019,7 +1145,6 @@ final class C2paReader {
         final targetLabel = manifestReference == null
             ? null
             : _manifestReferenceLabel(manifestReference.url);
-        if (targetLabel != null) referencedLabels.add(targetLabel);
         ingredientCount++;
         if (ingredientCount > settings.maxIngredientCount ||
             depth > settings.maxIngredientDepth) {
@@ -1033,14 +1158,46 @@ final class C2paReader {
           );
         } else {
           final target = targetLabel == null ? null : manifests[targetLabel];
-          if (manifestReference == null || target == null) {
+          if (manifestReference == null) {
+            // c2pa-rs (store.rs:1843-1854) distinguishes an ingredient that
+            // names a manifest the store cannot supply from one that claims no
+            // provenance at all. The latter is informational per C2PA spec
+            // 15.11.3.3, and is silent entirely when the ingredient is an
+            // input rather than a parent or component.
+            if (ingredient.relationship != Relationship.inputTo) {
+              statuses.add(
+                ValidationIssue.known(
+                  code: ValidationCode.ingredientProvenanceUnknown,
+                  url: uri,
+                  ingredientUri: uri,
+                ),
+              );
+            }
+          } else if (target == null) {
+            // c2pa-rs emits this via `.failure(...)` (store.rs:1837 and
+            // store.rs:4002), and `ValidationResults::add_status` buckets by
+            // the log item's kind. `log_kind()` classifies this code as
+            // Success, but that table is only consulted to repair statuses
+            // deserialized from a legacy ingredient, never for live emission,
+            // so the call-site severity is authoritative here.
             statuses.add(
-              ValidationIssue.known(
-                code: ValidationCode.ingredientManifestMissing,
-                url: manifestReference?.url,
+              ValidationIssue.withSeverity(
+                code: ValidationCode.ingredientManifestMissing.value,
+                severity: ValidationSeverity.failure,
+                url: manifestReference.url,
                 ingredientUri: uri,
               ),
             );
+            // c2pa-rs reports an unresolvable ingredient reference twice: once
+            // per ingredient from `ingredient_checks`, and once from the
+            // `get_claim_referenced_manifests` pre-pass that walks the whole
+            // claim graph before validation (store.rs:3995-4007). The pre-pass
+            // item carries the bare manifest label rather than a JUMBF URI and
+            // has no ingredient URI, so it lands in the active manifest's own
+            // statuses.
+            if (targetLabel != null) {
+              unresolvedManifestLabels.add(targetLabel);
+            }
           } else if (ancestors.contains(targetLabel)) {
             statuses.add(
               ValidationIssue.known(
@@ -1051,20 +1208,35 @@ final class C2paReader {
               ),
             );
           } else {
+            // c2pa-rs (store.rs:1690-1732) accepts two reference forms. The
+            // 1.3+ form hashes the manifest box; older producers hashed the
+            // claim CBOR instead. A legacy match is deliberately silent —
+            // upstream only reports `ingredient.manifest.validated` for the
+            // box-hash form, and only reports a mismatch when neither matches.
             final manifestMatches = await _matchesHashedUri(
               manifestReference,
               target.bytes,
               owner.claim?.algorithm,
             );
-            statuses.add(
-              ValidationIssue.known(
-                code: manifestMatches
-                    ? ValidationCode.ingredientManifestValidated
-                    : ValidationCode.ingredientManifestMismatch,
-                url: manifestReference.url,
-                ingredientUri: uri,
-              ),
-            );
+            final legacyMatches =
+                !manifestMatches &&
+                target.claimBytes != null &&
+                await _matchesHashedBytes(
+                  manifestReference,
+                  target.claimBytes!,
+                  owner.claim?.algorithm,
+                );
+            if (manifestMatches || !legacyMatches) {
+              statuses.add(
+                ValidationIssue.known(
+                  code: manifestMatches
+                      ? ValidationCode.ingredientManifestValidated
+                      : ValidationCode.ingredientManifestMismatch,
+                  url: manifestReference.url,
+                  ingredientUri: uri,
+                ),
+              );
+            }
             final signatureReference = ingredient.claimSignature;
             if (ingredient.version == IngredientAssertionVersion.v3 &&
                 signatureReference == null) {
@@ -1116,47 +1288,41 @@ final class C2paReader {
                 ),
               ),
             );
-            statuses.addAll(
-              ingredient.validationResults?.issues.map(
-                    (issue) => ValidationIssue(
-                      code: issue.code,
-                      url: issue.url,
-                      explanation: issue.explanation,
-                      ingredientUri: uri,
-                    ),
-                  ) ??
-                  const [],
-            );
-            reachedLabels.add(targetLabel!);
-            await visit(target, depth + 1, {...ancestors, targetLabel});
+            await visit(target, depth + 1, {...ancestors, targetLabel!});
           }
         }
         ingredientDeltas.add(
           IngredientDeltaValidationResult(
             ingredientAssertionUri: uri,
-            validationDeltas: StatusCodes(statuses: statuses),
+            validationDeltas: StatusCodes(
+              statuses: statuses.where(isDelta).toList(growable: false),
+            ),
           ),
         );
       }
     }
 
     await visit(active, 1, {activeLabel});
-    for (final entry in manifests.entries) {
-      if (entry.key == activeLabel ||
-          reachedLabels.contains(entry.key) ||
-          referencedLabels.contains(entry.key) ||
-          entry.value.validationIssues.isEmpty) {
-        continue;
-      }
-      ingredientDeltas.add(
-        IngredientDeltaValidationResult(
-          ingredientAssertionUri: entry.key,
-          validationDeltas: StatusCodes(statuses: entry.value.validationIssues),
-        ),
-      );
-    }
+
+    // c2pa-rs only validates manifests reachable from the active claim's
+    // ingredient graph (`StoreValidationInfo::ingredient_references`). A
+    // manifest left in the store that nothing references is never visited and
+    // contributes no statuses, and `manifest.unreferenced` — although defined
+    // upstream — has no emission site at all. This SDK previously reported
+    // each orphan as its own ingredient delta keyed by a bare manifest label,
+    // which produced deltas the reference implementation never emits.
     return ValidationResults(
-      activeManifest: StatusCodes(statuses: active.validationIssues),
+      activeManifest: StatusCodes(
+        statuses: [
+          ...active.validationIssues,
+          for (final label in unresolvedManifestLabels)
+            ValidationIssue.withSeverity(
+              code: ValidationCode.ingredientManifestMissing.value,
+              severity: ValidationSeverity.failure,
+              url: label,
+            ),
+        ],
+      ),
       ingredientDeltas: ingredientDeltas,
     );
   }
@@ -1392,6 +1558,23 @@ final class C2paReader {
     return _constantTimeEqual(digest, reference.hash);
   }
 
+  /// As [_matchesHashedUri], but for content that is already a bare payload
+  /// rather than a JUMBF box, so no box header must be stripped.
+  static Future<bool> _matchesHashedBytes(
+    ClaimHashedUri reference,
+    Uint8List payload,
+    String? fallbackAlgorithm,
+  ) async {
+    final algorithm = _hashAlgorithm(
+      reference.algorithm ?? fallbackAlgorithm ?? '',
+    );
+    if (algorithm == null || reference.hash.length != algorithm.digestLength) {
+      return false;
+    }
+    final digest = await algorithm.digest(payload);
+    return _constantTimeEqual(digest, reference.hash);
+  }
+
   static _ManifestPath? _assertionPath(String value, String manifestLabel) {
     final path = _jumbfPath(value);
     if (path == null) return null;
@@ -1511,12 +1694,10 @@ final class C2paReader {
         continue;
       }
 
-      issues.add(
-        ValidationIssue.known(
-          code: ValidationCode.assertionAccessible,
-          url: reference.url,
-        ),
-      );
+      // c2pa-rs defines `assertion.accessible` but never emits it: reaching an
+      // assertion successfully is reported solely through
+      // `assertion.hashedURI.match`. Emitting it added a spurious success
+      // status for every assertion in every manifest.
       final algorithm = _hashAlgorithm(
         reference.algorithm ?? claim.algorithm ?? 'sha256',
       );
@@ -1583,8 +1764,7 @@ final class C2paReader {
           label.startsWith('${BoxHashAssertion.label}__') ||
           label == DataHashAssertion.label ||
           label.startsWith('${DataHashAssertion.label}__') ||
-          label == BmffHashAssertion.label ||
-          label.startsWith('${BmffHashAssertion.label}__') ||
+          BmffHashAssertion.matchesLabel(label) ||
           label == CollectionHashAssertion.label ||
           label.startsWith('${CollectionHashAssertion.label}__')) {
         final node = byLabel[label];
@@ -1624,9 +1804,7 @@ final class C2paReader {
     final isDataHash =
         bindings.single.label == DataHashAssertion.label ||
         bindings.single.label!.startsWith('${DataHashAssertion.label}__');
-    final isBmffHash =
-        bindings.single.label == BmffHashAssertion.label ||
-        bindings.single.label!.startsWith('${BmffHashAssertion.label}__');
+    final isBmffHash = BmffHashAssertion.matchesLabel(bindings.single.label!);
     final isCollectionHash =
         bindings.single.label == CollectionHashAssertion.label ||
         bindings.single.label!.startsWith('${CollectionHashAssertion.label}__');
@@ -1681,6 +1859,8 @@ final class C2paReader {
         bindingMimeType,
         bindingFileName,
         context,
+        BmffHashAssertion.versionFromLabel(bindings.single.label!) ??
+            BmffHashAssertion.version,
       );
       return [
         ValidationIssue.known(
@@ -1765,6 +1945,13 @@ final class C2paReader {
         context,
       );
       return [
+        // c2pa-rs reports extra exclusions informationally whenever more than
+        // one range is declared, and verifies the hash either way.
+        if ((dataHash.exclusions ?? const []).length > 1)
+          ValidationIssue.known(
+            code: ValidationCode.assertionDataHashAdditionalExclusions,
+            url: assertionUrl,
+          ),
         ValidationIssue.known(
           code: switch (result) {
             _DataHashResult.match => ValidationCode.assertionDataHashMatch,
@@ -1772,8 +1959,6 @@ final class C2paReader {
               ValidationCode.assertionDataHashMismatch,
             _DataHashResult.malformed =>
               ValidationCode.assertionDataHashMalformed,
-            _DataHashResult.additionalExclusions =>
-              ValidationCode.assertionDataHashAdditionalExclusions,
           },
           url: assertionUrl,
         ),
@@ -1829,40 +2014,47 @@ final class C2paReader {
     final algorithm = _hashAlgorithm(
       assertion.algorithm ?? claimAlgorithm ?? '',
     );
-    if (algorithm == null ||
-        assertion.hash.length != algorithm.digestLength ||
-        layout == null) {
+    if (algorithm == null || assertion.hash.length != algorithm.digestLength) {
       return _DataHashResult.malformed;
     }
 
-    final declared = assertion.exclusions ?? const [];
-    final expected = layout.exclusions;
-    if (declared.length > expected.length) {
-      return _DataHashResult.additionalExclusions;
-    }
-    var previousEnd = 0;
-    for (final range in declared) {
-      if (range.length <= 0 ||
-          range.start < previousEnd ||
-          range.end > layout.sourceLength) {
+    // Hash using the exclusions the assertion declares, exactly as c2pa-rs
+    // `DataHash::verify_stream_hash` does.
+    //
+    // This previously required the declared exclusions to equal the ranges
+    // this SDK computes for the manifest segments, and reported a mismatch
+    // otherwise. Producers are free to exclude more than the manifest —
+    // Truepic excludes the whole leading region of the file — so that check
+    // rejected valid assets whose bytes hash correctly. The exclusions are
+    // covered by the claim signature, so they cannot be altered without a
+    // signing key; trusting them is what binds the check to the signer.
+    //
+    // `hash_stream_by_alg_with_progress` sorts the declared ranges itself and
+    // unions them into a `RangeSet`, so neither an unsorted nor an
+    // overlapping exclusion list is malformed upstream. It also derives the
+    // asset length from the stream rather than from a format layout engine,
+    // so a format this SDK cannot lay out (PDF, for example) still verifies.
+    // Its only structural rule is that the highest range end must fall within
+    // the asset.
+    final declared = [...?assertion.exclusions]
+      ..sort((a, b) => a.start.compareTo(b.start));
+    final sourceLength = layout?.sourceLength ?? await source.length;
+    if (declared.isNotEmpty) {
+      final last = declared.last;
+      if (last.start < 0 || last.length < 0 || last.end > sourceLength) {
         return _DataHashResult.malformed;
-      }
-      previousEnd = range.end;
-    }
-    if (declared.length != expected.length) return _DataHashResult.mismatch;
-    for (var index = 0; index < declared.length; index++) {
-      if (declared[index].start != expected[index].range.start ||
-          declared[index].length != expected[index].range.length) {
-        return _DataHashResult.mismatch;
       }
     }
     final digest = await AssetHashEngine(isCancelled: context.isCancelled)
         .digestExcluding(
           source,
           algorithm,
-          declared.map(
-            (range) => ByteRange.fromStartAndLength(range.start, range.length),
-          ),
+          declared
+              .where((range) => range.length > 0)
+              .map(
+                (range) =>
+                    ByteRange.fromStartAndLength(range.start, range.length),
+              ),
         );
     return _constantTimeEqual(digest, assertion.hash)
         ? _DataHashResult.match
@@ -1877,6 +2069,7 @@ final class C2paReader {
     String? mimeType,
     String? fileName,
     C2paContext context,
+    int assertionVersion,
   ) async {
     if (assertion.merkle != null) {
       if (assertion.hash != null || fragmentedSource == null) {
@@ -1889,6 +2082,7 @@ final class C2paReader {
         mimeType,
         fileName,
         context,
+        assertionVersion,
       );
     }
     final algorithm = _hashAlgorithm(
@@ -1905,7 +2099,7 @@ final class C2paReader {
       layout = await AssetHandlerRegistry().getBmffHashLayout(
         source,
         _isoBmffExclusions(assertion.exclusions),
-        version: BmffHashAssertion.version,
+        version: assertionVersion,
       );
     } on UnsupportedIsoBmffFeatureException catch (error, stackTrace) {
       throw C2paUnsupportedException(
@@ -1954,6 +2148,7 @@ final class C2paReader {
     String? mimeType,
     String? fileName,
     C2paContext context,
+    int assertionVersion,
   ) async {
     final maps = assertion.merkle!;
     if (maps.length != 1) return _BmffHashResult.malformed;
@@ -1974,7 +2169,7 @@ final class C2paReader {
         _isoBmffExclusions(assertion.exclusions),
         mimeType: mimeType,
         fileExtension: _fileExtension(fileName),
-        version: BmffHashAssertion.version,
+        version: assertionVersion,
       );
     } on MalformedAssetFormatException catch (error) {
       return error.message.contains('not ordered')
@@ -2357,7 +2552,7 @@ final class C2paReader {
       ]);
     }
 
-    final chain = _certificateChain(message);
+    final chain = _certificateChain(message, envelope);
     if (chain == null ||
         chain.isEmpty ||
         chain.length > context.trust.maxPathDepth) {
@@ -2450,22 +2645,19 @@ final class C2paReader {
         !evaluationTime.isBefore(leaf.notBefore) &&
         !evaluationTime.isAfter(leaf.notAfter);
     if (signatureValid) {
+      // c2pa-rs (claim.rs:3162-3179) emits `claimSignature.insideValidity`
+      // unconditionally as a companion to `claimSignature.validated` whenever
+      // the COSE signature verifies. Despite its name it is not a certificate
+      // validity check: expiry is reported separately and only through
+      // `signingCredential.expired` by `check_certificate_profile`.
+      // `claimSignature.outsideValidity` and `timeOfSigning.insideValidity`
+      // are defined upstream but have no emission site at all.
       issues.add(
         ValidationIssue.known(
-          code: insideValidity
-              ? ValidationCode.claimSignatureInsideValidity
-              : ValidationCode.claimSignatureOutsideValidity,
+          code: ValidationCode.claimSignatureInsideValidity,
           url: claim.signatureUri,
         ),
       );
-      if (timestamp.trustedTime != null && insideValidity) {
-        issues.add(
-          ValidationIssue.known(
-            code: ValidationCode.timeOfSigningInsideValidity,
-            url: claim.signatureUri,
-          ),
-        );
-      }
     }
 
     final pathResult = await validateCertificatePath(
@@ -2502,11 +2694,15 @@ final class C2paReader {
       );
     }
     if (!enforceTrust) {
-      final nonValidityIssues = profileIssues.where(
-        (issue) =>
-            issue.code != CertificateProfileIssueCode.expired &&
-            issue.code != CertificateProfileIssueCode.notYetValid,
-      );
+      // c2pa-rs `check_certificate_profile` returns `Err` as soon as the
+      // certificate is outside its validity window
+      // (certificate_profile.rs:113-153), so none of the later profile checks
+      // run and no `signingCredential.invalid` is reported for an expired
+      // certificate. Every issue code below corresponds to one of those later
+      // checks, so expiry must short-circuit them here too.
+      final nonValidityIssues = insideValidity
+          ? profileIssues
+          : const <CertificateProfileIssue>[];
       if (nonValidityIssues.isNotEmpty) {
         issues.add(
           ValidationIssue.known(
@@ -2514,14 +2710,13 @@ final class C2paReader {
             url: claim.signatureUri,
           ),
         );
-      } else if (profileIssues.isEmpty) {
-        issues.add(
-          ValidationIssue.known(
-            code: ValidationCode.signingCredentialUntrusted,
-            url: claim.signatureUri,
-          ),
-        );
       }
+      // No trust status at all is reported in this mode. c2pa-rs selects
+      // `Verifier::VerifyCertificateProfileOnly` when `verify.verify_trust` is
+      // off, and `Verifier::verify_trust` then returns `TrustAnchorType::
+      // NoCheck` without logging (`verifier.rs:216-226`). Reporting
+      // `signingCredential.untrusted` here would assert that the credential was
+      // checked against a trust list and rejected, when it was never checked.
     } else {
       switch (pathResult.status) {
         case CertificatePathStatus.trusted:
@@ -2576,7 +2771,9 @@ final class C2paReader {
     issues.addAll(ocsp.issues);
     final signatureInfo = SignatureInfo(
       algorithm: algorithm.name,
-      issuer: _displayName(leaf.issuer),
+      // c2pa-rs reports the signing certificate's own organization here, not
+      // the organization of the CA that issued it.
+      issuer: _displayName(leaf.subject),
       commonName: _nameAttribute(leaf.subject, '2.5.4.3'),
       serialNumber: leaf.serialNumber.toString(),
       notBefore: leaf.notBefore,
@@ -2652,6 +2849,11 @@ final class C2paReader {
           ),
         ], trustedTime: result.token?.timestampInfo.genTime.toUtc());
       case TimestampStatus.untrusted:
+        // Upstream reports an untrusted timestamp authority as informational,
+        // keeps the asset valid, and still surfaces the signing time. Verified
+        // against c2pa-rs v0.90.22 `sdk/tests/known_good/CA.json`, which pairs
+        // timeStamp.untrusted with a populated signature_info.time and an
+        // empty failure list.
         return _TimestampValidation([
           ValidationIssue.known(
             code: ValidationCode.timestampValidated,
@@ -2661,7 +2863,7 @@ final class C2paReader {
             code: ValidationCode.timestampUntrusted,
             url: claim.signatureUri,
           ),
-        ]);
+        ], trustedTime: result.token?.timestampInfo.genTime.toUtc());
       case TimestampStatus.invalid:
         final outsideValidity =
             issueCodes.contains(TimestampIssueCode.tsaCertificateProfile) &&
@@ -2732,12 +2934,10 @@ final class C2paReader {
         (!context.settings.enableOcspFetch ||
             !context.settings.allowNetworkAccess ||
             context.ocspTransport == null)) {
-      return _OcspValidation([
-        ValidationIssue.known(
-          code: ValidationCode.signingCredentialOcspSkipped,
-          url: url,
-        ),
-      ]);
+      // c2pa-rs only emits `signingCredential.ocsp.skipped` from test
+      // fixtures; skipping the revocation check contributes no status to a
+      // real validation report.
+      return const _OcspValidation([]);
     }
     if (issuer == null) {
       return _OcspValidation([
@@ -2900,10 +3100,18 @@ final class C2paReader {
     return _DerSlice(tag: tag, contentStart: cursor, end: end);
   }
 
-  static List<Uint8List>? _certificateChain(CoseSign1 message) {
+  static List<Uint8List>? _certificateChain(
+    CoseSign1 message,
+    _CoseEnvelope envelope,
+  ) {
+    // Early C2PA producers label the certificate chain with the text string
+    // "x5chain" rather than the RFC 9360 integer label 33. Those headers are
+    // split out of the COSE message by [_CoseEnvelope], so fall back to them
+    // before treating the chain as absent.
     final value =
         message.protectedHeaders[CoseHeaderLabel.x509Chain] ??
-        message.unprotectedHeaders[CoseHeaderLabel.x509Chain];
+        message.unprotectedHeaders[CoseHeaderLabel.x509Chain] ??
+        envelope.textHeaders['x5chain'];
     if (value is Uint8List) return [Uint8List.fromList(value)];
     if (value is List &&
         value.isNotEmpty &&
@@ -3086,7 +3294,7 @@ final class _OcspValidation {
 
 enum _BoxHashResult { match, mismatch, malformed }
 
-enum _DataHashResult { match, mismatch, malformed, additionalExclusions }
+enum _DataHashResult { match, mismatch, malformed }
 
 enum _BmffHashResult { match, mismatch, malformed }
 

@@ -19,14 +19,14 @@ final class BoxHashBox {
       throw const FormatException('A BoxHash box entry must be a map');
     }
     final names = value['names'];
-    final hash = value['hash'];
-    final pad = value['pad'];
+    final hash = cborBytes(value['hash']);
+    final pad = cborBytes(value['pad']);
     final algorithm = value['alg'];
     final excluded = value['excluded'];
     if (names is! List ||
         !names.every((name) => name is String) ||
-        hash is! Uint8List ||
-        pad is! Uint8List ||
+        hash == null ||
+        pad == null ||
         (algorithm != null && algorithm is! String) ||
         (excluded != null && excluded is! bool)) {
       throw const FormatException('Malformed BoxHash box entry');

@@ -61,3 +61,26 @@ T? enumByName<T extends Enum>(Iterable<T> values, Object? name) {
   }
   return null;
 }
+
+/// Coerces a CBOR value that should hold a byte string.
+///
+/// c2pa-rs annotates every such field with `#[serde(with = "serde_bytes")]`,
+/// and that visitor accepts a CBOR array of integers in addition to a real
+/// byte string. Producers in the wild — notably the 2022-era Adobe assets in
+/// the public test corpus — emit the array form, so rejecting it turns valid
+/// assets into validation failures.
+///
+/// Returns `null` when [value] is not a byte string or an array of bytes.
+Uint8List? cborBytes(Object? value) {
+  if (value is Uint8List) return value;
+  if (value is List) {
+    final bytes = Uint8List(value.length);
+    for (var i = 0; i < value.length; i++) {
+      final item = value[i];
+      if (item is! int || item < 0 || item > 255) return null;
+      bytes[i] = item;
+    }
+    return bytes;
+  }
+  return null;
+}

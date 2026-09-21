@@ -33,7 +33,6 @@ void main() {
       expect(
         statuses.success.map((issue) => issue.code),
         containsAll({
-          ValidationCode.assertionAccessible.value,
           ValidationCode.assertionHashedUriMatch.value,
           ValidationCode.claimSignatureValidated.value,
         }),
@@ -156,7 +155,7 @@ void main() {
     });
 
     test(
-      'verifies v2 created and gathered references and groups manifests',
+      'verifies v2 created and gathered references and skips orphan manifests',
       () async {
         final old = await _signedManifest('urn:c2pa:old');
         final active = await _signedManifest('urn:c2pa:active', version: 2);
@@ -179,19 +178,101 @@ void main() {
               .length,
           2,
         );
-        expect(reader.validationResults.ingredientDeltas, hasLength(1));
-        expect(
-          reader
-              .validationResults
-              .ingredientDeltas!
-              .single
-              .validationDeltas
-              .success
-              .map((issue) => issue.code),
-          contains(ValidationCode.claimSignatureValidated.value),
-        );
+        // `urn:c2pa:old` is present in the store but nothing in the active
+        // claim's ingredient graph references it. c2pa-rs validates only the
+        // manifests reachable through `StoreValidationInfo::
+        // ingredient_references`, so an orphaned manifest is never visited and
+        // contributes no ingredient delta.
+        expect(reader.validationResults.ingredientDeltas, isEmpty);
       },
     );
+
+    group('ingredient delta de-duplication', () {
+      // c2pa-rs computes ingredient *deltas*: `ValidationResults::from_store`
+      // drops a runtime status when an ingredient assertion already attests an
+      // identical one, because re-discovering a known fact is not a delta.
+      // Equality is code + URL + log kind, deliberately ignoring the
+      // explanation (`impl PartialEq for ValidationStatus`).
+      const childLabel = 'urn:c2pa:child';
+      const signatureUri = 'self#jumbf=/c2pa/$childLabel/c2pa.signature';
+
+      Future<C2paReader> read(String? attestedUrl) async {
+        final child = await _signedManifest(childLabel, tamperSignature: true);
+        final parent = await _signedManifest(
+          'urn:c2pa:parent',
+          ingredients: [
+            {
+              'dc:title': 'child.jpg',
+              'dc:format': 'image/jpeg',
+              'instanceID': 'xmp:iid:child',
+              'relationship': 'parentOf',
+              'c2pa_manifest': {
+                'url': 'self#jumbf=/c2pa/$childLabel',
+                'alg': 'sha256',
+                'hash': Uint8List(32),
+              },
+              if (attestedUrl != null)
+                'validationStatus': [
+                  {
+                    'code': ValidationCode.claimSignatureMismatch.value,
+                    'url': attestedUrl,
+                    'explanation': 'an explanation the validator never writes',
+                  },
+                ],
+            },
+          ],
+        );
+        return C2paReader.fromSource(
+          source: MemoryByteSource(
+            _store([child.manifest, parent.manifest]).encode(),
+          ),
+          context: C2paContext(
+            verifier: _DigestVerifier(parent.publicKey),
+            trust: _trust(),
+          ),
+        );
+      }
+
+      List<String> deltaFailures(C2paReader reader) => reader
+          .validationResults
+          .ingredientDeltas!
+          .single
+          .validationDeltas
+          .failure
+          .map((status) => status.code)
+          .toList(growable: false);
+
+      test('keeps a status no ingredient assertion attests', () async {
+        expect(
+          deltaFailures(await read(null)),
+          contains(ValidationCode.claimSignatureMismatch.value),
+        );
+      });
+
+      test('drops a status the ingredient already attested', () async {
+        expect(
+          deltaFailures(await read(signatureUri)),
+          isNot(contains(ValidationCode.claimSignatureMismatch.value)),
+        );
+      });
+
+      test('matches attested URLs only after resolving them', () async {
+        // The attested URL is relative to the manifest the ingredient points
+        // at, so it must be made absolute against `c2pa_manifest` before it can
+        // match the validator's absolute URL.
+        expect(
+          deltaFailures(await read('self#jumbf=c2pa.signature')),
+          isNot(contains(ValidationCode.claimSignatureMismatch.value)),
+        );
+      });
+
+      test('keeps a status attested against a different URL', () async {
+        expect(
+          deltaFailures(await read('Cose_Sign1')),
+          contains(ValidationCode.claimSignatureMismatch.value),
+        );
+      });
+    });
 
     test('reports unsupported and malformed COSE signatures', () async {
       final unsupported = await _signedManifest(
@@ -240,7 +321,23 @@ Future<_Fixture> _signedManifest(
   HashAlgorithm hashAlgorithm = HashAlgorithm.sha256,
   List<Map<String, Object?>> Function(Uint8List hash)? references,
   List<String> extraAssertions = const [],
+  List<Map<String, Object?>> ingredients = const [],
 }) async {
+  final ingredientBoxes = [
+    for (var index = 0; index < ingredients.length; index++)
+      _cborAssertionBox(
+        index == 0 ? 'c2pa.ingredient' : 'c2pa.ingredient__$index',
+        ingredients[index],
+      ),
+  ];
+  final ingredientReferences = [
+    for (final box in ingredientBoxes)
+      _reference(
+        box.description.label!,
+        Uint8List.fromList(await hashAlgorithm.digest(_payload(box.rawBytes))),
+        _hashName(hashAlgorithm),
+      ),
+  ];
   final assertion = _assertionBox(
     'test.assertion',
     value: tamperAssertion ? 'tampered' : 'original',
@@ -253,11 +350,7 @@ Future<_Fixture> _signedManifest(
   final gatheredHash = Uint8List.fromList(
     await hashAlgorithm.digest(_payload(gathered.rawBytes)),
   );
-  final hashName = switch (hashAlgorithm) {
-    HashAlgorithm.sha256 => 'sha256',
-    HashAlgorithm.sha384 => 'SHA-384',
-    HashAlgorithm.sha512 => 'sha_512',
-  };
+  final hashName = _hashName(hashAlgorithm);
 
   final claim = version == 1
       ? <String, Object?>{
@@ -268,7 +361,10 @@ Future<_Fixture> _signedManifest(
           'signature': 'self#jumbf=c2pa.signature',
           'assertions':
               references?.call(assertionHash) ??
-              [_reference('test.assertion', assertionHash, hashName)],
+              [
+                _reference('test.assertion', assertionHash, hashName),
+                ...ingredientReferences,
+              ],
           'dc:format': 'image/jpeg',
           'instanceID': 'xmp:iid:v1',
           'alg': hashName,
@@ -282,6 +378,7 @@ Future<_Fixture> _signedManifest(
           ],
           'gathered_assertions': [
             _reference('gathered.assertion', gatheredHash, hashName),
+            ...ingredientReferences,
           ],
           'alg': hashName,
         };
@@ -332,6 +429,7 @@ Future<_Fixture> _signedManifest(
           if (version == 2) gathered,
           for (final extra in extraAssertions)
             _assertionBox(extra, value: extra),
+          ...ingredientBoxes,
         ]),
       ],
     ),
@@ -381,6 +479,21 @@ JumbfSuperBoxNode _assertionStore(List<JumbfSuperBoxNode> assertions) =>
         label: 'c2pa.assertions',
       ),
       children: assertions,
+    );
+
+String _hashName(HashAlgorithm algorithm) => switch (algorithm) {
+  HashAlgorithm.sha256 => 'sha256',
+  HashAlgorithm.sha384 => 'SHA-384',
+  HashAlgorithm.sha512 => 'sha_512',
+};
+
+JumbfSuperBoxNode _cborAssertionBox(String label, Map<String, Object?> value) =>
+    JumbfSuperBoxNode(
+      description: JumbfDescription.fromUuidHex(
+        contentType: JumbfUuid.cbor,
+        label: label,
+      ),
+      children: [JumbfCborNode(encodeCbor(value))],
     );
 
 JumbfSuperBoxNode _assertionBox(String label, {required String value}) =>

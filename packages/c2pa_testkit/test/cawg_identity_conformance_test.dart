@@ -300,10 +300,7 @@ void main() {
           'username': 'testuser23',
           'uri': 'https://net.s2stagehance.com/testuser23',
           'verifiedAt': '2025-04-09T22:45:26.000Z',
-          'provider': {
-            'id': Uri.parse('https://behance.net'),
-            'name': 'behance',
-          },
+          'provider': {'id': 'https://behance.net', 'name': 'behance'},
         });
       },
     );

@@ -697,11 +697,14 @@ final class JpegAssetHandler
           ),
         );
         foundEnd = true;
-        if (cursor.position != sourceLength) {
-          throw const MalformedAssetFormatException(
-            'JPEG data contains trailing bytes after EOI.',
-          );
-        }
+        // Trailing bytes after EOI are common in the wild: Nikon and other
+        // cameras append a Multi-Picture Format preview image, often behind a
+        // run of padding. c2pa-rs scans segments with `while let Ok(..)` and
+        // simply stops at the first thing it cannot parse, so it tolerates
+        // this. Rejecting the file outright turned a readable asset into a
+        // hard error and produced no report at all. The trailing region stays
+        // outside the box list, matching c2pa-rs; data hashes cover it anyway
+        // because they are computed over the full source length.
         break;
       }
       if (marker == _startOfImage) {

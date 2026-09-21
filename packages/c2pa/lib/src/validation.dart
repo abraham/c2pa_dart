@@ -21,6 +21,20 @@ final class ValidationIssue {
   }) : code = code.value,
        severity = code.runtimeSeverity;
 
+  /// Creates an issue whose severity was determined by the producing validator
+  /// rather than by the static code registry.
+  ///
+  /// CAWG identity validation resolves some codes contextually (for example a
+  /// credential is only untrusted when trust verification is enabled), so the
+  /// severity it computed must be preserved instead of re-derived.
+  ValidationIssue.withSeverity({
+    required this.code,
+    required this.severity,
+    this.url,
+    this.explanation,
+    this.ingredientUri,
+  });
+
   factory ValidationIssue.fromJson(
     Map<String, Object?> json, {
     String? ingredientUri,
@@ -136,8 +150,14 @@ final class IngredientDeltaValidationResult {
     required StatusCodes validationDeltas,
   }) : validationDeltas = StatusCodes(
          statuses: validationDeltas.all.map(
-           (status) => ValidationIssue(
+           // Preserve the severity the producing validator computed. Rebuilding
+           // through the default constructor would re-derive it from the code
+           // registry, which silently discards contextual classifications such
+           // as CAWG identity severities and c2pa-rs call-site kinds that
+           // differ from `log_kind`.
+           (status) => ValidationIssue.withSeverity(
              code: status.code,
+             severity: status.severity,
              url: status.url,
              explanation: status.explanation,
              ingredientUri: ingredientAssertionUri,

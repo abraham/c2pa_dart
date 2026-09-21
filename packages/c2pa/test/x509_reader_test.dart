@@ -108,7 +108,9 @@ void main() {
       expect(reader.validationResults.errors, isEmpty);
       expect(reader.validationResults.state, ValidationState.trusted);
       expect(info.algorithm, 'ps256');
-      expect(info.issuer, 'Test Intermediate');
+      // c2pa-rs reports the signing certificate's own organization, not the
+      // issuing CA's. Verified against c2patool 0.27.22 (c2pa 0.90.22).
+      expect(info.issuer, 'Test Signer');
       expect(info.commonName, 'Trusted Signer');
       expect(info.serialNumber, '3');
       expect(info.certificateChain, hasLength(2));
@@ -117,27 +119,35 @@ void main() {
       expect(() => info.certificateChain.first[0] = 0, throwsUnsupportedError);
     });
 
-    test(
-      'keeps a valid signature valid but untrusted without an anchor',
-      () async {
-        final reader = await _read(
-          trustedManifest,
-          trust: C2paTrustConfiguration(evaluationTime: DateTime.utc(2027)),
-        );
-        final codes = _codes(reader);
+    test('keeps a valid signature valid and reports no trust status without an '
+        'anchor', () async {
+      final reader = await _read(
+        trustedManifest,
+        trust: C2paTrustConfiguration(evaluationTime: DateTime.utc(2027)),
+      );
+      final codes = _codes(reader);
 
-        expect(codes, contains(ValidationCode.claimSignatureValidated.value));
-        expect(
-          codes,
-          contains(ValidationCode.claimSignatureInsideValidity.value),
-        );
-        expect(
-          codes,
-          contains(ValidationCode.signingCredentialUntrusted.value),
-        );
-        expect(reader.validationResults.state, ValidationState.valid);
-      },
-    );
+      expect(codes, contains(ValidationCode.claimSignatureValidated.value));
+      expect(
+        codes,
+        contains(ValidationCode.claimSignatureInsideValidity.value),
+      );
+      // With no anchors and `verifyTrust` off, c2pa-rs selects
+      // `Verifier::VerifyCertificateProfileOnly`, whose `verify_trust`
+      // returns `TrustAnchorType::NoCheck` without logging. Reporting
+      // `untrusted` would claim the credential was checked against a trust
+      // list and rejected, when it was never checked at all.
+      expect(
+        codes,
+        isNot(
+          anyOf(
+            contains(ValidationCode.signingCredentialUntrusted.value),
+            contains(ValidationCode.signingCredentialTrusted.value),
+          ),
+        ),
+      );
+      expect(reader.validationResults.state, ValidationState.valid);
+    });
 
     test('reports certificates outside their validity interval', () async {
       final reader = await _read(
@@ -150,15 +160,19 @@ void main() {
       final codes = _codes(reader);
 
       expect(codes, contains(ValidationCode.claimSignatureValidated.value));
+      // c2pa-rs reports an out-of-validity signing certificate only through
+      // `signingCredential.expired`; it never emits
+      // `claimSignature.outsideValidity`, and still pairs
+      // `claimSignature.insideValidity` with `claimSignature.validated`.
       expect(
         codes,
-        contains(ValidationCode.claimSignatureOutsideValidity.value),
+        isNot(contains(ValidationCode.claimSignatureOutsideValidity.value)),
+      );
+      expect(
+        codes,
+        contains(ValidationCode.claimSignatureInsideValidity.value),
       );
       expect(codes, contains(ValidationCode.signingCredentialExpired.value));
-      expect(
-        codes,
-        isNot(contains(ValidationCode.claimSignatureInsideValidity.value)),
-      );
       expect(reader.validationResults.state, ValidationState.invalid);
     });
 
@@ -217,7 +231,10 @@ void main() {
       final codes = _codes(reader);
 
       expect(codes, contains(ValidationCode.claimSignatureValidated.value));
-      expect(codes, contains(ValidationCode.signingCredentialUntrusted.value));
+      expect(
+        codes,
+        isNot(contains(ValidationCode.signingCredentialUntrusted.value)),
+      );
       expect(
         codes,
         isNot(contains(ValidationCode.signingCredentialInvalid.value)),
@@ -329,7 +346,6 @@ void main() {
 
       expect(codes, contains(ValidationCode.timestampValidated.value));
       expect(codes, contains(ValidationCode.timestampTrusted.value));
-      expect(codes, contains(ValidationCode.timeOfSigningInsideValidity.value));
       expect(
         codes,
         contains(ValidationCode.claimSignatureInsideValidity.value),
@@ -398,7 +414,10 @@ void main() {
       final untrustedCodes = _codes(untrusted);
       expect(untrustedCodes, contains(ValidationCode.timestampValidated.value));
       expect(untrustedCodes, contains(ValidationCode.timestampUntrusted.value));
-      expect(untrusted.activeManifest!.signatureInfo!.time, isNull);
+      // An untrusted authority still yields a signing time upstream: c2pa-rs
+      // v0.90.22 `sdk/tests/known_good/CA.json` pairs timeStamp.untrusted with
+      // a populated signature_info.time.
+      expect(untrusted.activeManifest!.signatureInfo!.time, isNotNull);
     });
 
     test(
@@ -714,7 +733,7 @@ void main() {
       }
     });
 
-    test('reports skipped OCSP when network fetching is disabled', () async {
+    test('reports no OCSP status when network fetching is disabled', () async {
       final reader = await _read(
         trustedManifest,
         trust: C2paTrustConfiguration(
@@ -723,9 +742,16 @@ void main() {
         ),
       );
 
+      // c2pa-rs only produces `signingCredential.ocsp.skipped` from test
+      // fixtures, never from a validation run, so a skipped revocation check
+      // must contribute no status at all.
       expect(
         _codes(reader),
-        contains(ValidationCode.signingCredentialOcspSkipped.value),
+        isNot(contains(ValidationCode.signingCredentialOcspSkipped.value)),
+      );
+      expect(
+        _codes(reader),
+        contains(ValidationCode.signingCredentialTrusted.value),
       );
     });
 

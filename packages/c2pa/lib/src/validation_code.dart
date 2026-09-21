@@ -26,11 +26,52 @@ final class ValidationCode {
 
   static ValidationCode? lookup(String value) => registry[value];
 
+  /// Severities for CAWG identity status codes.
+  ///
+  /// These are deliberately kept out of [registry], which mirrors the 89 status
+  /// strings of the c2pa-rs v0.90.22 SDK exactly. CAWG identity codes are a
+  /// separate namespace upstream and must not dilute that fidelity check.
+  static final Map<String, ValidationSeverity>
+  cawgRegistry = Map<String, ValidationSeverity>.unmodifiable({
+    'cawg.identity.well-formed': ValidationSeverity.success,
+    'cawg.identity.trusted': ValidationSeverity.success,
+    'cawg.identity.credential.not_revoked': ValidationSeverity.success,
+    'cawg.ica.time_stamp.validated': ValidationSeverity.success,
+    'cawg.identity.credential.untrusted': ValidationSeverity.informational,
+    'cawg.identity.credential.ocsp_unknown': ValidationSeverity.informational,
+    'cawg.identity.timestamp.untrusted': ValidationSeverity.informational,
+    // Upstream skips assertions with an unrecognized signature type
+    // instead of invalidating the manifest.
+    'cawg.identity.sig_type.unknown': ValidationSeverity.informational,
+    'cawg.identity.cbor.invalid': ValidationSeverity.failure,
+    'cawg.identity.pad.invalid': ValidationSeverity.failure,
+    'cawg.identity.assertion.mismatch': ValidationSeverity.failure,
+    'cawg.identity.assertion.duplicate': ValidationSeverity.failure,
+    'cawg.identity.hard_binding_missing': ValidationSeverity.failure,
+    'cawg.identity.assertion.cycle': ValidationSeverity.failure,
+
+    'cawg.identity.signature.invalid': ValidationSeverity.failure,
+    'cawg.identity.credential.invalid': ValidationSeverity.failure,
+    'cawg.identity.credential.revoked': ValidationSeverity.failure,
+    'cawg.identity.timestamp.malformed': ValidationSeverity.failure,
+    'cawg.ica.invalid_cose_sign1': ValidationSeverity.failure,
+    'cawg.ica.invalid_alg': ValidationSeverity.failure,
+    'cawg.ica.invalid_content_type': ValidationSeverity.failure,
+    'cawg.ica.invalid_verifiable_credential': ValidationSeverity.failure,
+    'cawg.ica.signer_payload.mismatch': ValidationSeverity.failure,
+    'cawg.ica.invalid_issuer': ValidationSeverity.failure,
+    'cawg.ica.did_unavailable': ValidationSeverity.failure,
+    'cawg.ica.invalid_did_document': ValidationSeverity.failure,
+    'cawg.ica.signature_mismatch': ValidationSeverity.failure,
+    'cawg.ica.time_stamp.invalid': ValidationSeverity.failure,
+  });
+
   static ValidationSeverity classify(
     String value, {
     ValidationClassification classification = ValidationClassification.runtime,
   }) =>
       lookup(value)?.severity(classification: classification) ??
+      cawgRegistry[value] ??
       ValidationSeverity.failure;
 
   static const claimSignatureValidated = ValidationCode._(
