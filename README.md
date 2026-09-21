@@ -294,6 +294,36 @@ on pinned Dart for Linux, macOS, and Windows. It also runs Chrome tests and
 web-safe package-barrel compiles on Linux, plus a representative Flutter stable
 analysis/test job.
 
+## Conformance with c2pa-rs
+
+Those tests read assets this SDK also wrote, so on their own they can only
+prove self-consistency. The `c2pa-rs conformance` CI job closes that gap: it
+reads a corpus signed by other producers with both this SDK and a pinned
+`c2patool` reference build, and fails if any asset is reported differently.
+
+Run it locally against the same pins:
+
+```sh
+cd packages/c2pa_testkit
+dart run tool/conformance.dart \
+  --oracle /path/to/c2patool \
+  --corpus public=/path/to/public-testfiles \
+  --corpus vendored=test/fixtures/vendor/c2pa-rs-0.90.22/media
+```
+
+`tool/conformance_pins.json` is the single source of truth for the reference
+build, its checksum, the corpus commit, and the number of assets each corpus
+must contain; CI reads it rather than restating it. Moving a pin is a
+deliberate, reviewable change to that file.
+
+Statuses that depend on a trust store are excluded from scoring by default,
+because `c2patool` ships one and the `c2pa-rs` SDK does not, so they measure
+configuration rather than conformance. Pass `--strict-trust` to include them.
+
+An asset may be exempted through `knownDivergences`, but the gate fails if an
+exempted asset starts agreeing or if an entry matches no asset, so the
+allowlist cannot quietly rot.
+
 The conformance corpus is pinned under
 `packages/c2pa_testkit/test/fixtures/vendor`. Its `provenance.json` records the
 immutable upstream revision, original path, license, size, and SHA-256 digest

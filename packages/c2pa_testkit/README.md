@@ -28,6 +28,16 @@ processes and external corpora are caller controlled. Vendored conformance
 fixtures retain their upstream licenses and immutable provenance under
 `test/fixtures/vendor`.
 
+## Conformance gate
+
+`tool/conformance.dart` compares this SDK against a pinned `c2patool`
+reference build over a corpus signed by other producers, which is the only
+check that can catch the SDK agreeing with itself while disagreeing with the
+specification. `tool/conformance_pins.json` pins the reference build, its
+checksum, the corpus commit, and each corpus size. The comparison itself is
+`compareOracleReports`, exported from the main library and unit tested, so the
+gate cannot silently stop detecting anything.
+
 ## Package relationships
 
 `c2pa_testkit` depends on all core sibling packages and is intended for their

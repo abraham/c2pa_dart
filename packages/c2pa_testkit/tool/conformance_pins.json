@@ -1,0 +1,66 @@
+{
+  "$comment": [
+    "Pins for the corpus conformance gate (tool/conformance.dart).",
+    "The reference implementation and the corpus are both pinned so a failure",
+    "always means this SDK changed, never that the world moved underneath it.",
+    "Bumping either pin is a deliberate, reviewable act: update the version,",
+    "the checksum, expectedAssetCount, and any newly accepted divergence in",
+    "the same commit."
+  ],
+  "oracle": {
+    "tool": "c2patool",
+    "version": "0.27.22",
+    "sdk": "c2pa-rs 0.90.22",
+    "$comment": [
+      "c2patool 0.27.22 bundles c2pa 0.90.22, which is the version declared in",
+      "tool/compatibility.json. Checksums are of the published release archives."
+    ],
+    "releaseTag": "c2patool-v0.27.22",
+    "archives": {
+      "x86_64-unknown-linux-gnu": {
+        "asset": "c2patool-v0.27.22-x86_64-unknown-linux-gnu.tar.gz",
+        "sha256": "6f138ad53da1a62f1cd6ee71c60727efa27d13b811f4c0ea8c2a8528968b358b",
+        "$comment": [
+          "binaryPath/binarySha256 are checked on every run, including when the",
+          "binary comes from the CI cache. The archive digest alone would not",
+          "cover that path, and workflow caches are writable from any branch."
+        ],
+        "binaryPath": "c2patool/c2patool",
+        "binarySha256": "0707d482c319f70bb668e4cafc96274abffa381b7e51063c86071dd7556c8b67"
+      }
+    }
+  },
+  "corpora": {
+    "public": {
+      "$comment": [
+        "The C2PA organisation's public conformance assets: signed by many",
+        "different producers, so they exercise encodings this SDK never",
+        "writes itself. Pinned to a commit so the gate measures this SDK."
+      ],
+      "repository": "https://github.com/c2pa-org/public-testfiles",
+      "commit": "22beccc075707475b038d8789d0136c009e43143",
+      "expectedAssetCount": 117
+    },
+    "vendored": {
+      "$comment": [
+        "Fixtures vendored from c2pa-rs 0.90.22 and checked in under",
+        "test/fixtures/vendor. Needs no download, so it also keeps the gate",
+        "meaningful if the public corpus is ever unreachable."
+      ],
+      "path": "test/fixtures/vendor/c2pa-rs-0.90.22/media",
+      "expectedAssetCount": 10
+    }
+  },
+  "$knownDivergences": [
+    "Corpus-relative asset path -> the difference kinds accepted for it.",
+    "Every entry needs a comment justifying why the divergence is correct.",
+    "The gate fails if a listed asset starts agreeing, so stale entries cannot",
+    "quietly accumulate.",
+    "",
+    "Trust-store-dependent statuses are excluded from scoring by default:",
+    "c2patool ships a trust store and the c2pa-rs SDK does not, so those",
+    "statuses measure configuration rather than conformance. Run the tool with",
+    "--strict-trust to see them."
+  ],
+  "knownDivergences": {}
+}
