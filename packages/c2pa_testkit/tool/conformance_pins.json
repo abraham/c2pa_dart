@@ -17,6 +17,16 @@
     ],
     "releaseTag": "c2patool-v0.27.22",
     "archives": {
+      "universal-apple-darwin": {
+        "$comment": [
+          "Not used by CI, which is Linux only. Pinned so the same verified",
+          "oracle is available to developers running the gate locally."
+        ],
+        "asset": "c2patool-v0.27.22-universal-apple-darwin.zip",
+        "sha256": "d064ca72e599c74e5fdc2ed04b47d6cb62210a2b14db589d078c2ec27c98d3df",
+        "binaryPath": "c2patool/c2patool",
+        "binarySha256": "0338680141f6e0cfcbfa3e36a6d6a4198fee86e33866c3bf4b783cde25ff26ef"
+      },
       "x86_64-unknown-linux-gnu": {
         "asset": "c2patool-v0.27.22-x86_64-unknown-linux-gnu.tar.gz",
         "sha256": "6f138ad53da1a62f1cd6ee71c60727efa27d13b811f4c0ea8c2a8528968b358b",

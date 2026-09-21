@@ -44,6 +44,11 @@ jobs:
         run: dart format --output=none --set-exit-if-changed packages tool
       - name: Analyze workspace
         run: dart analyze
+      - name: Lint shell scripts
+        # Linux only: the scripts are identical everywhere and shellcheck is
+        # preinstalled on the Ubuntu runner.
+        if: runner.os == 'Linux'
+        run: shellcheck -x scripts/*.sh
       - name: Check compatibility ledger
         run: dart run tool/check_compatibility.dart
       - name: Test every package
@@ -58,28 +63,11 @@ jobs:
     timeout-minutes: 30
     env:
       PUB_CACHE: ${{ runner.temp }}/pub-cache
-      PINS: packages/c2pa_testkit/tool/conformance_pins.json
     steps:
       - uses: actions/checkout@v4
       - name: Read conformance pins
         id: pins
-        shell: bash
-        run: |
-          set -euo pipefail
-          # The pins file is the single source of truth for what we compare
-          # against, so the workflow reads it rather than restating it.
-          target=x86_64-unknown-linux-gnu
-          {
-            echo "version=$(jq -re '.oracle.version' "$PINS")"
-            echo "sha256=$(jq -re --arg t "$target" '.oracle.archives[$t].sha256' "$PINS")"
-            echo "asset=$(jq -re --arg t "$target" '.oracle.archives[$t].asset' "$PINS")"
-            echo "tag=$(jq -re '.oracle.releaseTag' "$PINS")"
-            echo "binary=$(jq -re --arg t "$target" '.oracle.archives[$t].binaryPath' "$PINS")"
-            echo "binarysha=$(jq -re --arg t "$target" '.oracle.archives[$t].binarySha256' "$PINS")"
-            echo "repository=$(jq -re '.corpora.public.repository' "$PINS")"
-            echo "commit=$(jq -re '.corpora.public.commit' "$PINS")"
-            echo "vendored=$(jq -re '.corpora.vendored.path' "$PINS")"
-          } >> "$GITHUB_OUTPUT"
+        run: scripts/conformance-pins.sh
       - uses: dart-lang/setup-dart@v1
         with:
           sdk: ${{ env.DART_SDK_VERSION }}
@@ -98,59 +86,17 @@ jobs:
         with:
           path: ${{ runner.temp }}/oracle
           key: c2patool-${{ steps.pins.outputs.version }}-${{ steps.pins.outputs.sha256 }}
-      - name: Download reference c2patool
-        if: steps.oracle-cache.outputs.cache-hit != 'true'
-        shell: bash
-        env:
-          ASSET: ${{ steps.pins.outputs.asset }}
-          TAG: ${{ steps.pins.outputs.tag }}
-          SHA256: ${{ steps.pins.outputs.sha256 }}
-        run: |
-          set -euo pipefail
-          curl --fail --silent --show-error --location --retry 3 -o "$ASSET" \
-            "https://github.com/contentauth/c2pa-rs/releases/download/${TAG}/${ASSET}"
-          # A conformance oracle is only meaningful if it is the exact build we
-          # pinned, so verify before anything executes it.
-          echo "${SHA256}  ${ASSET}" | sha256sum --check --strict
-          mkdir -p "${RUNNER_TEMP}/oracle"
-          tar -xzf "$ASSET" -C "${RUNNER_TEMP}/oracle"
-      - name: Verify the reference binary
-        shell: bash
-        env:
-          BINARY: ${{ steps.pins.outputs.binary }}
-          BINARY_SHA256: ${{ steps.pins.outputs.binarysha }}
-        run: |
-          set -euo pipefail
-          # Runs on the cache-hit path too: a workflow cache is writable from
-          # any branch, so a restored binary is not trusted until it is checked.
-          cd "${RUNNER_TEMP}/oracle"
-          echo "${BINARY_SHA256}  ${BINARY}" | sha256sum --check --strict
-          chmod +x "$BINARY"
+      - name: Fetch and verify the reference c2patool
+        # No cache-hit condition: the script verifies the binary against the
+        # pin every time, including when it was restored from the cache.
+        run: scripts/fetch-oracle.sh --dir "${RUNNER_TEMP}/oracle"
       - name: Check out the pinned public test corpus
-        shell: bash
-        env:
-          REPOSITORY: ${{ steps.pins.outputs.repository }}
-          COMMIT: ${{ steps.pins.outputs.commit }}
-        run: |
-          set -euo pipefail
-          # Fetch the pinned commit only: the corpus is large and its history is
-          # irrelevant to the gate.
-          mkdir -p "${RUNNER_TEMP}/corpus"
-          cd "${RUNNER_TEMP}/corpus"
-          git init --quiet .
-          git remote add origin "$REPOSITORY"
-          git fetch --quiet --depth 1 origin "$COMMIT"
-          git checkout --quiet FETCH_HEAD
+        run: scripts/fetch-corpus.sh --dir "${RUNNER_TEMP}/corpus"
       - name: Compare against c2pa-rs
-        working-directory: packages/c2pa_testkit
-        shell: bash
-        env:
-          VENDORED: ${{ steps.pins.outputs.vendored }}
         run: |
-          dart run tool/conformance.dart \
-            --oracle "${RUNNER_TEMP}/oracle/c2patool/c2patool" \
-            --corpus "public=${RUNNER_TEMP}/corpus" \
-            --corpus "vendored=${VENDORED}" \
+          scripts/conformance.sh \
+            --oracle "${RUNNER_TEMP}/oracle/${{ steps.pins.outputs.binary }}" \
+            --corpus "${RUNNER_TEMP}/corpus" \
             --json "${RUNNER_TEMP}/conformance.json"
       - name: Upload conformance report
         # Kept on success too: the report is the evidence behind the pass, and
@@ -182,26 +128,9 @@ jobs:
       - name: Resolve workspace
         run: dart pub get
       - name: Compile web-safe package barrels
-        shell: bash
-        # Every package that claims web support, not just the lower layers:
-        # a dart:io import pulled into the c2pa or c2pa_formats barrel would
-        # otherwise break web consumers with nothing to catch it.
-        run: |
-          for package in c2pa_io c2pa_codec c2pa_crypto c2pa_formats c2pa c2pa_testkit; do
-            (cd "packages/$package" && dart compile js tool/web_compile_smoke.dart -o .dart_tool/ci/web_compile_smoke.js)
-          done
+        run: scripts/web-compile.sh
       - name: Test browser cryptography
-        working-directory: packages/c2pa_crypto
-        run: >-
-          dart test --platform chrome
-          test/asset_hash_test.dart
-          test/crl_test.dart
-          test/ocsp_test.dart
-          test/path_validation_test.dart
-          test/timestamp_test.dart
-          test/trust_list_test.dart
-          test/webcrypto_backend_test.dart
-          test/x509_certificate_test.dart
+        run: scripts/browser-test.sh
   flutter:
     name: Flutter stable compatibility
     runs-on: ubuntu-latest
@@ -220,8 +149,4 @@ jobs:
       - name: Analyze pure-Dart packages with Flutter tooling
         run: flutter analyze
       - name: Test native and browser-compatible packages
-        shell: bash
-        run: |
-          for package in c2pa_io c2pa_codec c2pa_crypto c2pa_formats c2pa; do
-            (cd "packages/$package" && dart test)
-          done
+        run: scripts/test-packages.sh

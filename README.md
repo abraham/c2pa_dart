@@ -36,7 +36,9 @@ Publish packages in dependency order:
 
 All workspace packages use the same prerelease version and constrain sibling
 packages with the matching caret constraint. Wait for each dependency version
-to become available on pub.dev before publishing its dependents. Every published
+to become available on pub.dev before publishing its dependents.
+`scripts/publish.sh` automates this ordering and waiting; see
+[Releasing](#releasing). Every published
 package includes `LICENSE`, `LICENSE-MIT`, and `LICENSE-APACHE` and is offered
 under `MIT OR Apache-2.0`. All packages publish source links to the canonical
 [`abraham/c2pa_dart`](https://github.com/abraham/c2pa_dart) repository and use
@@ -341,19 +343,62 @@ From the repository root:
 
 ```sh
 dart pub get
-dart format --output=none --set-exit-if-changed packages tool
+dart format --output=none --set-exit-if-changed packages tool scripts
 dart analyze
 dart run tool/check_compatibility.dart
 dart run tool/test_all.dart
-for package in c2pa_io c2pa_codec c2pa_crypto c2pa_formats c2pa c2pa_testkit; do
-  (cd "packages/$package" && dart compile js tool/web_compile_smoke.dart -o .dart_tool/web-smoke.js)
-done
+scripts/web-compile.sh
 ```
 
-CI runs four jobs: `dart` (formatting, analysis, the compatibility ledger, and
-every package test on pinned Dart for Linux, macOS, and Windows), `browser`
-(Chrome tests and web-safe barrel compiles), `flutter` (a representative
-Flutter stable analysis/test job), and `c2pa-rs conformance`, described below.
+CI runs four jobs: `dart` (formatting, analysis, the compatibility ledger,
+shell script linting, and every package test on pinned Dart for Linux, macOS,
+and Windows), `browser` (Chrome tests and web-safe barrel compiles), `flutter`
+(a representative Flutter stable analysis/test job), and `c2pa-rs conformance`,
+described below.
+
+### Scripts
+
+Anything CI does beyond a single command lives in `scripts/`, so the workflow
+and a developer machine run the same code instead of two copies that drift
+apart. Every script accepts `--help`, resolves paths relative to the repository
+root, and can be run from any directory.
+
+| Script | Purpose |
+| --- | --- |
+| `conformance.sh` | Runs the c2pa-rs conformance gate, fetching the reference build and corpus if they are not supplied |
+| `fetch-oracle.sh` | Downloads, checksum-verifies, and extracts the pinned `c2patool` reference build |
+| `fetch-corpus.sh` | Fetches the pinned public test corpus commit |
+| `conformance-pins.sh` | Reads `conformance_pins.json` and emits the pins CI consumes |
+| `web-compile.sh` | Compiles every web-targeting package barrel to JavaScript |
+| `browser-test.sh` | Runs the `c2pa_crypto` browser suites on Chrome |
+| `test-packages.sh` | Runs package test suites under whichever SDK is on `PATH` |
+| `bump-version.sh` | Sets one version across all seven packages, their sibling constraints, and their changelogs |
+| `publish.sh` | Validates and publishes the workspace to pub.dev in dependency order |
+
+`lib.sh` holds the shared helpers and is sourced rather than executed.
+
+### Releasing
+
+`scripts/bump-version.sh <version>` updates every package version, every
+sibling caret constraint, and every `CHANGELOG.md` in one step; it refuses to
+run if the workspace is not already internally consistent, so a partial bump
+cannot be the starting point for a release.
+
+`scripts/publish.sh` then validates and uploads. It defaults to a dry run
+because publishing is irreversible, and requires an explicit `--publish` to
+upload anything:
+
+```sh
+scripts/bump-version.sh 0.1.0-dev.2   # then edit the CHANGELOG entries
+scripts/publish.sh                    # validate everything, upload nothing
+scripts/publish.sh --publish --tag    # upload in dependency order, then tag
+```
+
+It checks that all packages agree on the version, that each has a changelog
+section for it, and that the working tree is clean; publishes in dependency
+order; and waits for each package to become resolvable on pub.dev before
+uploading its dependents. `--from <package>` resumes a partially completed
+release.
 
 ## Conformance with c2pa-rs
 
@@ -362,15 +407,16 @@ prove self-consistency. The `c2pa-rs conformance` CI job closes that gap: it
 reads a corpus signed by other producers with both this SDK and a pinned
 `c2patool` reference build, and fails if any asset is reported differently.
 
-Run it locally against the same pins:
+Run it locally against the same pins. With no arguments the script fetches and
+verifies the reference build and corpus itself, so this reproduces the CI job
+exactly:
 
 ```sh
-cd packages/c2pa_testkit
-dart run tool/conformance.dart \
-  --oracle /path/to/c2patool \
-  --corpus public=/path/to/public-testfiles \
-  --corpus vendored=test/fixtures/vendor/c2pa-rs-0.90.22/media
+scripts/conformance.sh
 ```
+
+Pass `--oracle` and `--corpus` to reuse copies you already have, or
+`--strict-trust` to include trust-store-dependent statuses.
 
 `tool/conformance_pins.json` is the single source of truth for the reference
 build, its checksum, the corpus commit, and the number of assets each corpus
