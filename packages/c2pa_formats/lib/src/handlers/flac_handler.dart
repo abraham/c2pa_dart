@@ -4,6 +4,7 @@ import 'package:c2pa_io/c2pa_io.dart';
 
 import '../asset_format.dart';
 import '../asset_handler.dart';
+import '../byte_compare.dart';
 import '../errors.dart';
 import '../xmp.dart';
 import 'mp3_handler.dart';
@@ -91,15 +92,16 @@ final class FlacAssetHandler
     final length = await source.length;
     if (length < 4 || length > maxSourceSize) return false;
     final prefix = await source.read(ByteRange(0, length < 10 ? length : 10));
-    if (_startsWith(prefix, _signature)) return true;
-    if (prefix.length < 10 || !_startsWith(prefix, const [0x49, 0x44, 0x33])) {
+    if (bytesEqualAt(prefix, 0, _signature)) return true;
+    if (prefix.length < 10 ||
+        !bytesEqualAt(prefix, 0, const [0x49, 0x44, 0x33])) {
       return false;
     }
     final tagSize = _decodeSyncSafe(prefix, 6);
     if (tagSize == null) return false;
     final flacOffset = 10 + tagSize;
     if (flacOffset + 4 > length) return false;
-    return _equalBytes(
+    return bytesEqual(
       await source.read(ByteRange(flacOffset, flacOffset + 4)),
       _signature,
     );
@@ -218,7 +220,7 @@ final class FlacAssetHandler
     var flacOffset = 0;
     final prefixLength = sourceLength < 10 ? sourceLength : 10;
     final prefix = await source.read(ByteRange(0, prefixLength));
-    if (_startsWith(prefix, const [0x49, 0x44, 0x33])) {
+    if (bytesEqualAt(prefix, 0, const [0x49, 0x44, 0x33])) {
       if (prefix.length < 10) {
         throw TruncatedAssetException(
           expectedLength: 10,
@@ -251,7 +253,7 @@ final class FlacAssetHandler
         actualLength: sourceLength,
       );
     }
-    if (!_equalBytes(
+    if (!bytesEqual(
       await source.read(ByteRange(flacOffset, flacOffset + 4)),
       _signature,
     )) {
@@ -317,21 +319,5 @@ final class FlacAssetHandler
       result = (result << 7) | value;
     }
     return result;
-  }
-
-  static bool _startsWith(List<int> bytes, List<int> prefix) {
-    if (bytes.length < prefix.length) return false;
-    for (var index = 0; index < prefix.length; index++) {
-      if (bytes[index] != prefix[index]) return false;
-    }
-    return true;
-  }
-
-  static bool _equalBytes(List<int> left, List<int> right) {
-    if (left.length != right.length) return false;
-    for (var index = 0; index < left.length; index++) {
-      if (left[index] != right[index]) return false;
-    }
-    return true;
   }
 }

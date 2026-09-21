@@ -3,7 +3,9 @@ import 'dart:typed_data';
 
 import 'package:webcrypto/webcrypto.dart' as webcrypto;
 
+import 'byte_compare.dart';
 import 'cose_signing.dart';
+import 'der_reader.dart';
 import 'ecdsa_signature.dart';
 import 'signing_algorithm.dart';
 
@@ -165,7 +167,7 @@ Future<webcrypto.RsaPssPublicKey> importRsaPssPublicKeySpki(
   List<int> spki,
   SigningAlgorithm signingAlgorithm,
 ) {
-  final outer = _SpkiDerReader(Uint8List.fromList(spki));
+  final outer = DerReader(Uint8List.fromList(spki));
   final sequence = outer.read(0x30).reader();
   outer.requireEnd();
 
@@ -183,13 +185,13 @@ Future<webcrypto.RsaPssPublicKey> importRsaPssPublicKeySpki(
     0x01,
   ];
   const rsaPssOid = <int>[0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x01, 0x0a];
-  if (_equalBytes(oid, rsaEncryptionOid)) {
+  if (bytesEqual(oid, rsaEncryptionOid)) {
     final parameters = algorithm.read(0x05);
     if (parameters.content.isNotEmpty) {
       throw const FormatException('rsaEncryption parameters must be NULL');
     }
     algorithm.requireEnd();
-  } else if (_equalBytes(oid, rsaPssOid)) {
+  } else if (bytesEqual(oid, rsaPssOid)) {
     _validateRsaPssSpkiParameters(algorithm, signingAlgorithm);
   } else {
     return null;
@@ -202,7 +204,7 @@ Future<webcrypto.RsaPssPublicKey> importRsaPssPublicKeySpki(
       'RSA SubjectPublicKey BIT STRING must have zero unused bits',
     );
   }
-  final rsa = _SpkiDerReader(Uint8List.fromList(bitString.sublist(1)));
+  final rsa = DerReader(Uint8List.fromList(bitString.sublist(1)));
   final publicKey = rsa.read(0x30).reader();
   rsa.requireEnd();
   final modulus = _positiveInteger(publicKey.read(0x02).content, 'modulus');
@@ -212,7 +214,7 @@ Future<webcrypto.RsaPssPublicKey> importRsaPssPublicKeySpki(
 }
 
 void _validateRsaPssSpkiParameters(
-  _SpkiDerReader algorithm,
+  DerReader algorithm,
   SigningAlgorithm signingAlgorithm,
 ) {
   final parameters = algorithm.read(0x30).reader();
@@ -264,7 +266,7 @@ void _validateRsaPssSpkiParameters(
   final maskWrapper = parameters.read(0xa1).reader();
   final mask = maskWrapper.read(0x30).reader();
   maskWrapper.requireEnd();
-  if (!_equalBytes(mask.read(0x06).content, mgf1Oid)) {
+  if (!bytesEqual(mask.read(0x06).content, mgf1Oid)) {
     throw const FormatException('RSA-PSS mask algorithm must be MGF1');
   }
   final maskHash = mask.read(0x30).reader();
@@ -297,11 +299,11 @@ void _validateRsaPssSpkiParameters(
 }
 
 void _requireAlgorithmIdentifier(
-  _SpkiDerReader algorithm,
+  DerReader algorithm,
   List<int> expectedOid,
   String name,
 ) {
-  if (!_equalBytes(algorithm.read(0x06).content, expectedOid)) {
+  if (!bytesEqual(algorithm.read(0x06).content, expectedOid)) {
     throw FormatException('$name does not match the requested algorithm');
   }
   final nullParameters = algorithm.read(0x05);
@@ -339,86 +341,6 @@ Uint8List _positiveInteger(Uint8List bytes, String name) {
 
 String _base64UrlNoPadding(List<int> bytes) =>
     base64Url.encode(bytes).replaceAll('=', '');
-
-bool _equalBytes(List<int> left, List<int> right) {
-  if (left.length != right.length) {
-    return false;
-  }
-  for (var index = 0; index < left.length; index++) {
-    if (left[index] != right[index]) {
-      return false;
-    }
-  }
-  return true;
-}
-
-final class _SpkiDerValue {
-  const _SpkiDerValue(this.content);
-
-  final Uint8List content;
-
-  _SpkiDerReader reader() => _SpkiDerReader(content);
-}
-
-final class _SpkiDerReader {
-  _SpkiDerReader(this.bytes);
-
-  final Uint8List bytes;
-  int offset = 0;
-
-  int? peekTag() => offset == bytes.length ? null : bytes[offset];
-
-  void requireEnd() {
-    if (offset != bytes.length) {
-      throw const FormatException('Trailing DER data in RSA SPKI');
-    }
-  }
-
-  _SpkiDerValue read(int expectedTag) {
-    if (offset >= bytes.length) {
-      throw const FormatException('Truncated RSA SPKI');
-    }
-    final tag = bytes[offset++];
-    if (tag != expectedTag) {
-      throw FormatException(
-        'Expected DER tag 0x${expectedTag.toRadixString(16)}, '
-        'found 0x${tag.toRadixString(16)}',
-      );
-    }
-    final length = _readLength();
-    if (length > bytes.length - offset) {
-      throw const FormatException('RSA SPKI value exceeds its container');
-    }
-    final content = Uint8List.fromList(bytes.sublist(offset, offset + length));
-    offset += length;
-    return _SpkiDerValue(content);
-  }
-
-  int _readLength() {
-    if (offset >= bytes.length) {
-      throw const FormatException('Truncated RSA SPKI length');
-    }
-    final first = bytes[offset++];
-    if (first < 0x80) {
-      return first;
-    }
-    final count = first & 0x7f;
-    if (count == 0 ||
-        count > 4 ||
-        count > bytes.length - offset ||
-        bytes[offset] == 0) {
-      throw const FormatException('Invalid RSA SPKI DER length');
-    }
-    var length = 0;
-    for (var index = 0; index < count; index++) {
-      length = length << 8 | bytes[offset++];
-    }
-    if (length < 0x80) {
-      throw const FormatException('Non-minimal RSA SPKI DER length');
-    }
-    return length;
-  }
-}
 
 /// Platform-backed ECDSA signer that emits fixed-width P1363 signatures.
 final class WebCryptoEcdsaSigningBackend implements CoseSigningBackend {

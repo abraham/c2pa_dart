@@ -5,6 +5,7 @@ import 'package:c2pa_io/c2pa_io.dart';
 
 import '../asset_format.dart';
 import '../asset_handler.dart';
+import '../byte_compare.dart';
 import '../errors.dart';
 import '../hash_layout.dart';
 import '../xmp.dart';
@@ -94,7 +95,7 @@ final class PngAssetHandler
   Future<bool> detect(RandomAccessByteSource source) async {
     if (await source.length < _signature.length) return false;
     final signature = await source.read(ByteRange(0, _signature.length));
-    return _equalBytes(signature, _signature);
+    return bytesEqual(signature, _signature);
   }
 
   @override
@@ -244,7 +245,7 @@ final class PngAssetHandler
     final inspection = await _inspect(source);
     _PngXmp? found;
     for (final chunk in inspection.chunks) {
-      if (!_equalBytes(chunk.type, _textChunkType)) continue;
+      if (!bytesEqual(chunk.type, _textChunkType)) continue;
       final data = await source.read(
         ByteRange(chunk.offset + 8, chunk.end - 4),
       );
@@ -332,7 +333,7 @@ final class PngAssetHandler
         continue;
       }
       await copyByteRange(source, staged, ByteRange(chunk.offset, chunk.end));
-      if (existing == null && _equalBytes(chunk.type, _headerChunkType)) {
+      if (existing == null && bytesEqual(chunk.type, _headerChunkType)) {
         await staged.append(encoded);
       }
     }
@@ -431,7 +432,7 @@ final class PngAssetHandler
       chunkSize: _streamReadSize,
     );
     for (final chunk in inspection.chunks) {
-      if (!_equalBytes(chunk.type, _c2paChunkType)) {
+      if (!bytesEqual(chunk.type, _c2paChunkType)) {
         await copyByteRange(
           source,
           staged,
@@ -439,7 +440,7 @@ final class PngAssetHandler
           chunkSize: _streamReadSize,
         );
       }
-      if (_equalBytes(chunk.type, _headerChunkType) && replacement != null) {
+      if (bytesEqual(chunk.type, _headerChunkType) && replacement != null) {
         await staged.append(replacement);
       }
     }
@@ -470,7 +471,7 @@ final class PngAssetHandler
       );
     }
     final signature = await source.read(ByteRange(0, _signature.length));
-    if (!_equalBytes(signature, _signature)) {
+    if (!bytesEqual(signature, _signature)) {
       throw const MalformedAssetFormatException(
         'PNG data has an invalid signature.',
       );
@@ -508,9 +509,9 @@ final class PngAssetHandler
       }
       final crcOffset = dataOffset + dataLength;
       final chunkEnd = crcOffset + 4;
-      final isManifest = _equalBytes(type, _c2paChunkType);
-      final isHeader = _equalBytes(type, _headerChunkType);
-      final isEnd = _equalBytes(type, _endChunkType);
+      final isManifest = bytesEqual(type, _c2paChunkType);
+      final isHeader = bytesEqual(type, _headerChunkType);
+      final isEnd = bytesEqual(type, _endChunkType);
 
       if (chunks.isEmpty && (!isHeader || dataLength != 13)) {
         throw const MalformedAssetFormatException(
@@ -622,14 +623,6 @@ final class PngAssetHandler
         (byte) =>
             (byte >= 0x41 && byte <= 0x5a) || (byte >= 0x61 && byte <= 0x7a),
       );
-
-  static bool _equalBytes(List<int> left, List<int> right) {
-    if (left.length != right.length) return false;
-    for (var index = 0; index < left.length; index++) {
-      if (left[index] != right[index]) return false;
-    }
-    return true;
-  }
 
   static int _uint32(List<int> bytes, int offset) =>
       (bytes[offset] << 24) |

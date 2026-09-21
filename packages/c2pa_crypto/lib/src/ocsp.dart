@@ -2,7 +2,9 @@ import 'dart:typed_data';
 
 import 'package:cryptography/cryptography.dart' as cryptography;
 
+import 'byte_compare.dart';
 import 'certificate_profile.dart';
+import 'der_reader.dart';
 import 'hash_algorithm.dart';
 import 'path_validation.dart';
 import 'signing_algorithm.dart';
@@ -312,7 +314,7 @@ final class OcspResponse {
   factory OcspResponse.parse(List<int> input) {
     _validateBytes(input, 'input');
     final der = Uint8List.fromList(input);
-    final root = _DerReader(der);
+    final root = DerReader(der);
     final outer = root.read(0x30);
     root.requireEnd();
     final reader = outer.reader();
@@ -609,7 +611,7 @@ Future<OcspVerificationResult> verifyOcspResponse(
   final issues = <OcspIssue>[];
   try {
     final targetIssuedByIssuer =
-        _equalBytes(certificate.issuer.der, issuer.subject.der) &&
+        constantTimeBytesEqual(certificate.issuer.der, issuer.subject.der) &&
         await verifySignatureWithCertificatePublicKey(
           certificate: issuer,
           signatureAlgorithm: certificate.signatureAlgorithm,
@@ -656,7 +658,7 @@ Future<OcspVerificationResult> verifyOcspResponse(
   final single = matches.length == 1 ? matches.single : null;
   if (expectedNonce != null &&
       (response.nonce == null ||
-          !_equalBytes(expectedNonce, response.nonce!))) {
+          !constantTimeBytesEqual(expectedNonce, response.nonce!))) {
     issues.add(
       const OcspIssue(
         OcspIssueCode.nonceMismatch,
@@ -741,7 +743,7 @@ Future<OcspVerificationResult> verifyOcspResponse(
     signingAlgorithm = _algorithmForKey(responder);
   }
 
-  final responderIsIssuer = _equalBytes(responder.der, issuer.der);
+  final responderIsIssuer = constantTimeBytesEqual(responder.der, issuer.der);
   CertificatePathValidationResult pathResult;
   final policyAtTime = TrustPolicy(
     trustAnchors: trustPolicy.trustAnchors,
@@ -749,7 +751,7 @@ Future<OcspVerificationResult> verifyOcspResponse(
       ...trustPolicy.intermediates,
       issuer.der,
       ...response.certificates
-          .where((item) => !_equalBytes(item.der, responder.der))
+          .where((item) => !constantTimeBytesEqual(item.der, responder.der))
           .map((item) => item.der),
     ],
     allowedEndEntitySha256Hashes: responderIsIssuer
@@ -768,7 +770,7 @@ Future<OcspVerificationResult> verifyOcspResponse(
     var authorized = false;
     try {
       authorized =
-          _equalBytes(responder.issuer.der, issuer.subject.der) &&
+          constantTimeBytesEqual(responder.issuer.der, issuer.subject.der) &&
           await verifySignatureWithCertificatePublicKey(
             certificate: issuer,
             signatureAlgorithm: responder.signatureAlgorithm,
@@ -846,7 +848,7 @@ OcspResponse _parseBasicResponse(
   OcspResponseStatus status,
   List<int> basicDer,
 ) {
-  final root = _DerReader(basicDer);
+  final root = DerReader(basicDer);
   final basic = root.read(0x30);
   root.requireEnd();
   final reader = basic.reader();
@@ -889,7 +891,7 @@ OcspResponse _parseBasicResponse(
   List<OcspSingleResponse> responses,
   List<int>? nonce,
 })
-_parseResponseData(_DerElement element) {
+_parseResponseData(DerValue element) {
   final reader = element.reader();
   if (!reader.isAtEnd && reader.peekTag() == 0xa0) {
     final version = reader.read(0xa0).reader();
@@ -934,7 +936,7 @@ _parseResponseData(_DerElement element) {
   );
 }
 
-OcspSingleResponse _parseSingleResponse(_DerElement element) {
+OcspSingleResponse _parseSingleResponse(DerValue element) {
   final reader = element.reader();
   final certId = _parseCertId(reader.read(0x30));
   final status = reader.read();
@@ -988,7 +990,7 @@ OcspSingleResponse _parseSingleResponse(_DerElement element) {
   );
 }
 
-OcspCertId _parseCertId(_DerElement element) {
+OcspCertId _parseCertId(DerValue element) {
   final reader = element.reader();
   final hashAlgorithm = _parseOcspCertIdHashAlgorithm(
     _parseAlgorithmIdentifier(reader.read(0x30)),
@@ -1033,7 +1035,7 @@ OcspCertIdHashAlgorithm _parseOcspCertIdHashAlgorithm(
   };
 }
 
-List<int>? _parseExtensions(_DerElement element, {required bool allowNonce}) {
+List<int>? _parseExtensions(DerValue element, {required bool allowNonce}) {
   final reader = element.reader();
   List<int>? nonce;
   final seen = <String>{};
@@ -1054,7 +1056,7 @@ List<int>? _parseExtensions(_DerElement element, {required bool allowNonce}) {
     final value = extension.read(0x04).content;
     extension.requireEnd();
     if (oid == OcspOids.nonce && allowNonce) {
-      final nonceReader = _DerReader(value);
+      final nonceReader = DerReader(value);
       nonce = nonceReader.read(0x04).content;
       nonceReader.requireEnd();
       if (nonce.isEmpty || nonce.length > 32) {
@@ -1075,17 +1077,19 @@ Future<X509Certificate?> _findResponderCertificate(
   final matches = <X509Certificate>[];
   for (final candidate in candidates) {
     final matchesId = switch (response.responderId!) {
-      OcspResponderByName() => _equalBytes(
+      OcspResponderByName() => constantTimeBytesEqual(
         candidate.subject.der,
         (response.responderId! as OcspResponderByName).nameDer,
       ),
-      OcspResponderByKey() => _equalBytes(
+      OcspResponderByKey() => constantTimeBytesEqual(
         await _sha1(candidate.subjectPublicKey),
         (response.responderId! as OcspResponderByKey).keyHash,
       ),
     };
     if (matchesId &&
-        !matches.any((item) => _equalBytes(item.der, candidate.der))) {
+        !matches.any(
+          (item) => constantTimeBytesEqual(item.der, candidate.der),
+        )) {
       matches.add(candidate);
     }
   }
@@ -1098,11 +1102,11 @@ Future<bool> _certIdMatches(
   X509Certificate issuer,
 ) async =>
     certId.serialNumber == certificate.serialNumber &&
-    _equalBytes(
+    constantTimeBytesEqual(
       certId.issuerNameHash,
       await certId.hashAlgorithm.digest(issuer.subject.der),
     ) &&
-    _equalBytes(
+    constantTimeBytesEqual(
       certId.issuerKeyHash,
       await certId.hashAlgorithm.digest(issuer.subjectPublicKey),
     );
@@ -1152,7 +1156,7 @@ SigningAlgorithm _rsaPssAlgorithm(List<int>? parameters) {
   if (parameters == null) {
     throw const FormatException('RSA-PSS parameters are required');
   }
-  final root = _DerReader(parameters);
+  final root = DerReader(parameters);
   final sequence = root.read(0x30);
   root.requireEnd();
   final reader = sequence.reader();
@@ -1176,13 +1180,13 @@ String _parameterOid(X509AlgorithmIdentifier algorithm) {
   if (parameters == null) {
     throw const FormatException('Missing EC named-curve parameters');
   }
-  final reader = _DerReader(parameters);
+  final reader = DerReader(parameters);
   final oid = _decodeOid(reader.read(0x06).content);
   reader.requireEnd();
   return oid;
 }
 
-X509AlgorithmIdentifier _parseAlgorithmIdentifier(_DerElement element) {
+X509AlgorithmIdentifier _parseAlgorithmIdentifier(DerValue element) {
   final reader = element.reader();
   final oid = _decodeOid(reader.read(0x06).content);
   final parameters = reader.isAtEnd ? null : reader.read().encoded;
@@ -1257,7 +1261,7 @@ DateTime _generalizedTime(List<int> bytes) {
   return value;
 }
 
-List<int> _bitString(_DerElement element) {
+List<int> _bitString(DerValue element) {
   if (element.content.isEmpty || element.content.first != 0) {
     throw const FormatException(
       'OCSP signature must be a byte-aligned BIT STRING',
@@ -1315,82 +1319,6 @@ String _decodeOid(List<int> bytes) {
     first - BigInt.from(firstArc * 40),
     ...values,
   ].join('.');
-}
-
-final class _DerElement {
-  const _DerElement(this.tag, this.encoded, this.content);
-  final int tag;
-  final Uint8List encoded;
-  final Uint8List content;
-  _DerReader reader() => _DerReader(content);
-}
-
-final class _DerReader {
-  _DerReader(List<int> bytes) : _bytes = Uint8List.fromList(bytes);
-  final Uint8List _bytes;
-  int _offset = 0;
-  bool get isAtEnd => _offset == _bytes.length;
-
-  int peekTag() {
-    if (isAtEnd) {
-      throw const FormatException('Unexpected end of DER');
-    }
-    return _bytes[_offset];
-  }
-
-  _DerElement read([int? expectedTag]) {
-    if (isAtEnd) {
-      throw const FormatException('Unexpected end of DER');
-    }
-    final start = _offset;
-    final tag = _bytes[_offset++];
-    if (tag & 0x1f == 0x1f) {
-      throw const FormatException('High-tag-number DER is unsupported');
-    }
-    if (expectedTag != null && tag != expectedTag) {
-      throw FormatException(
-        'Unexpected DER tag 0x${tag.toRadixString(16)}; '
-        'expected 0x${expectedTag.toRadixString(16)}',
-      );
-    }
-    if (isAtEnd) {
-      throw const FormatException('Missing DER length');
-    }
-    var length = _bytes[_offset++];
-    if (length & 0x80 != 0) {
-      final count = length & 0x7f;
-      if (count == 0 || count > 4 || _offset + count > _bytes.length) {
-        throw const FormatException('Invalid DER length');
-      }
-      if (_bytes[_offset] == 0) {
-        throw const FormatException('Non-minimal DER length');
-      }
-      length = 0;
-      for (var index = 0; index < count; index++) {
-        length = (length << 8) | _bytes[_offset++];
-      }
-      if (length < 128) {
-        throw const FormatException('Non-minimal DER length');
-      }
-    }
-    final contentStart = _offset;
-    final end = contentStart + length;
-    if (end > _bytes.length) {
-      throw const FormatException('Truncated DER value');
-    }
-    _offset = end;
-    return _DerElement(
-      tag,
-      Uint8List.fromList(_bytes.sublist(start, end)),
-      Uint8List.fromList(_bytes.sublist(contentStart, end)),
-    );
-  }
-
-  void requireEnd() {
-    if (!isAtEnd) {
-      throw const FormatException('Trailing DER data');
-    }
-  }
 }
 
 List<int> _algorithmIdentifier(String oid) =>
@@ -1461,17 +1389,6 @@ List<int> _tlv(int tag, List<int> content) {
     length >>= 8;
   }
   return [tag, 0x80 | bytes.length, ...bytes, ...content];
-}
-
-bool _equalBytes(List<int> left, List<int> right) {
-  if (left.length != right.length) {
-    return false;
-  }
-  var difference = 0;
-  for (var index = 0; index < left.length; index++) {
-    difference |= left[index] ^ right[index];
-  }
-  return difference == 0;
 }
 
 void _validateBytes(List<int> bytes, String name) {

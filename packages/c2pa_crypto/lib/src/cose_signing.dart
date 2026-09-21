@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:c2pa_codec/c2pa_codec.dart';
 
+import 'byte_compare.dart';
 import 'signing_algorithm.dart';
 
 /// Performs signing for one or more algorithms using caller-owned keys.
@@ -198,7 +199,7 @@ final class CoseVerifier {
 
     final embedded = message.payload;
     final payloadBytes = _bytes(payload, 'payload');
-    if (embedded != null && !_equalBytes(embedded, payloadBytes)) {
+    if (embedded != null && !bytesEqual(embedded, payloadBytes)) {
       throw const PayloadMismatchException();
     }
 
@@ -278,16 +279,4 @@ Uint8List _bytes(List<int> input, String name) {
     throw ArgumentError.value(input, name, 'Must contain only bytes');
   }
   return Uint8List.fromList(input);
-}
-
-bool _equalBytes(List<int> left, List<int> right) {
-  if (left.length != right.length) {
-    return false;
-  }
-  for (var i = 0; i < left.length; i++) {
-    if (left[i] != right[i]) {
-      return false;
-    }
-  }
-  return true;
 }

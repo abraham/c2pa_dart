@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:c2pa_io/c2pa_io.dart';
 import 'package:cryptography/cryptography.dart' as cryptography;
 
+import 'byte_compare.dart';
 import 'hash_algorithm.dart';
 
 /// Reports whether streaming asset hashing should stop before more I/O.
@@ -409,16 +410,8 @@ final class AssetHashEngine {
 ///
 /// The loop runs for the longer input length; unlike internal range
 /// ordering helpers, it does not stop at the first differing byte.
-bool constantTimeDigestEquals(List<int> left, List<int> right) {
-  var difference = left.length ^ right.length;
-  final length = left.length > right.length ? left.length : right.length;
-  for (var index = 0; index < length; index++) {
-    final leftByte = index < left.length ? left[index] : 0;
-    final rightByte = index < right.length ? right[index] : 0;
-    difference |= leftByte ^ rightByte;
-  }
-  return difference == 0;
-}
+bool constantTimeDigestEquals(List<int> left, List<int> right) =>
+    constantTimeBytesEqual(left, right);
 
 cryptography.HashAlgorithm _hashImplementation(HashAlgorithm algorithm) =>
     switch (algorithm) {

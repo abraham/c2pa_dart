@@ -4,6 +4,7 @@ import 'package:c2pa_io/c2pa_io.dart';
 
 import '../asset_format.dart';
 import '../asset_handler.dart';
+import '../byte_compare.dart';
 import '../errors.dart';
 import '../hash_layout.dart';
 
@@ -171,14 +172,7 @@ final class StandaloneC2paHandler
   }
 
   static bool _hasSupportedType(Uint8List header) =>
-      _matchesAt(header, 4, _jumbType) || _matchesAt(header, 4, _c2paType);
-
-  static bool _matchesAt(Uint8List bytes, int offset, List<int> expected) {
-    for (var index = 0; index < expected.length; index++) {
-      if (bytes[offset + index] != expected[index]) return false;
-    }
-    return true;
-  }
+      bytesEqualAt(header, 4, _jumbType) || bytesEqualAt(header, 4, _c2paType);
 
   static int _readUint32(Uint8List bytes, int offset) =>
       ByteData.sublistView(bytes).getUint32(offset);

@@ -1,6 +1,8 @@
 import 'dart:typed_data';
 
+import 'byte_compare.dart';
 import 'certificate_profile.dart';
+import 'der_reader.dart';
 import 'hash_algorithm.dart';
 import 'path_validation.dart';
 import 'signing_algorithm.dart';
@@ -185,7 +187,7 @@ final class CmsTimestampToken {
   factory CmsTimestampToken.parse(List<int> input) {
     _validateBytes(input, 'input');
     final der = Uint8List.fromList(input);
-    final root = _DerReader(der);
+    final root = DerReader(der);
     final contentInfo = root.read(0x30);
     root.requireEnd();
     final contentReader = contentInfo.reader();
@@ -441,7 +443,7 @@ Future<TimestampVerificationResult> verifyTimestampToken(
     final actual = await signerInfo.digestAlgorithm.digest(
       token.encapsulatedContent,
     );
-    if (!_equalBytes(actual, messageDigest)) {
+    if (!constantTimeBytesEqual(actual, messageDigest)) {
       issues.add(
         const TimestampIssue(
           TimestampIssueCode.messageDigestMismatch,
@@ -454,7 +456,7 @@ Future<TimestampVerificationResult> verifyTimestampToken(
   final imprint = await token.timestampInfo.messageImprintAlgorithm.digest(
     signedBytes,
   );
-  if (!_equalBytes(imprint, token.timestampInfo.messageImprint)) {
+  if (!constantTimeBytesEqual(imprint, token.timestampInfo.messageImprint)) {
     issues.add(
       const TimestampIssue(
         TimestampIssueCode.messageImprintMismatch,
@@ -663,7 +665,7 @@ Future<Uint8List> requestTimestamp({
   return Uint8List.fromList(response);
 }
 
-CmsSignerInfo _parseSignerInfo(_DerElement element) {
+CmsSignerInfo _parseSignerInfo(DerValue element) {
   final reader = element.reader();
   final version = _positiveInteger(reader.read(0x02).content);
   final sidElement = reader.read();
@@ -730,7 +732,7 @@ CmsSignerInfo _parseSignerInfo(_DerElement element) {
   );
 }
 
-void _validateUnsignedAttributes(_DerElement attributes) {
+void _validateUnsignedAttributes(DerValue attributes) {
   final reader = attributes.reader();
   if (reader.isAtEnd) {
     throw const FormatException('CMS unsigned attributes must not be empty');
@@ -753,7 +755,7 @@ void _validateUnsignedAttributes(_DerElement attributes) {
 }
 
 ({String? contentType, List<int>? messageDigest, DateTime? signingTime})
-_parseSignedAttributes(_DerElement signedAttributes) {
+_parseSignedAttributes(DerValue signedAttributes) {
   final reader = signedAttributes.reader();
   String? contentType;
   List<int>? messageDigest;
@@ -762,7 +764,7 @@ _parseSignedAttributes(_DerElement signedAttributes) {
   final seen = <String>{};
   while (!reader.isAtEnd) {
     final attribute = reader.read(0x30);
-    if (previous != null && _compareBytes(previous, attribute.encoded) >= 0) {
+    if (previous != null && compareBytes(previous, attribute.encoded) >= 0) {
       throw const FormatException(
         'CMS signed attributes are not in canonical DER order',
       );
@@ -803,7 +805,7 @@ _parseSignedAttributes(_DerElement signedAttributes) {
 }
 
 TimestampInfo _parseTimestampInfo(List<int> der) {
-  final root = _DerReader(der);
+  final root = DerReader(der);
   final sequence = root.read(0x30);
   root.requireEnd();
   final reader = sequence.reader();
@@ -881,7 +883,7 @@ TimestampInfo _parseTimestampInfo(List<int> der) {
   );
 }
 
-void _validateAccuracy(_DerElement element) {
+void _validateAccuracy(DerValue element) {
   final reader = element.reader();
   if (reader.isAtEnd) {
     throw const FormatException('TSTInfo accuracy must not be empty');
@@ -913,10 +915,13 @@ X509Certificate? _findSignerCertificate(CmsTimestampToken token) {
     return switch (identifier) {
       CmsIssuerAndSerialNumber() =>
         certificate.serialNumber == identifier.serialNumber &&
-            _equalBytes(certificate.issuer.der, identifier.issuerDer),
+            constantTimeBytesEqual(
+              certificate.issuer.der,
+              identifier.issuerDer,
+            ),
       CmsSubjectKeyIdentifier() =>
         certificate.subjectKeyIdentifier != null &&
-            _equalBytes(
+            constantTimeBytesEqual(
               certificate.subjectKeyIdentifier!,
               identifier.identifier,
             ),
@@ -987,7 +992,7 @@ HashAlgorithm _parsePssDigest(List<int>? parametersDer) {
   if (parametersDer == null) {
     throw const FormatException('RSA-PSS parameters are required');
   }
-  final root = _DerReader(parametersDer);
+  final root = DerReader(parametersDer);
   final sequence = root.read(0x30);
   root.requireEnd();
   final reader = sequence.reader();
@@ -1012,7 +1017,7 @@ HashAlgorithm _parsePssDigest(List<int>? parametersDer) {
         if (mgf.oid != '1.2.840.113549.1.1.8' || mgf.parametersDer == null) {
           throw const FormatException('RSA-PSS requires MGF1');
         }
-        final inner = _DerReader(mgf.parametersDer!);
+        final inner = DerReader(mgf.parametersDer!);
         mgfHash = _parseHashAlgorithm(
           _parseAlgorithmIdentifier(inner.read(0x30)),
         );
@@ -1034,7 +1039,7 @@ HashAlgorithm _parsePssDigest(List<int>? parametersDer) {
   return hash;
 }
 
-X509AlgorithmIdentifier _parseAlgorithmIdentifier(_DerElement element) {
+X509AlgorithmIdentifier _parseAlgorithmIdentifier(DerValue element) {
   final reader = element.reader();
   final oid = _decodeOid(reader.read(0x06).content);
   final parameters = reader.isAtEnd ? null : reader.read().encoded;
@@ -1068,7 +1073,7 @@ String _hashOid(HashAlgorithm algorithm) => switch (algorithm) {
   HashAlgorithm.sha512 => '2.16.840.1.101.3.4.2.3',
 };
 
-DateTime _parseTime(_DerElement element) => switch (element.tag) {
+DateTime _parseTime(DerValue element) => switch (element.tag) {
   0x17 => _parseUtcTime(element.content),
   0x18 => _parseGeneralizedTime(element.content),
   _ => throw const FormatException('Unsupported time encoding'),
@@ -1175,86 +1180,6 @@ String _decodeOid(List<int> bytes) {
   return [BigInt.from(firstArc), secondArc, ...values].join('.');
 }
 
-final class _DerElement {
-  const _DerElement(this.tag, this.encoded, this.content);
-
-  final int tag;
-  final Uint8List encoded;
-  final Uint8List content;
-
-  _DerReader reader() => _DerReader(content);
-}
-
-final class _DerReader {
-  _DerReader(List<int> bytes) : _bytes = Uint8List.fromList(bytes);
-
-  final Uint8List _bytes;
-  int _offset = 0;
-
-  bool get isAtEnd => _offset == _bytes.length;
-
-  int peekTag() {
-    if (isAtEnd) {
-      throw const FormatException('Unexpected end of DER');
-    }
-    return _bytes[_offset];
-  }
-
-  _DerElement read([int? expectedTag]) {
-    if (_offset >= _bytes.length) {
-      throw const FormatException('Unexpected end of DER');
-    }
-    final start = _offset;
-    final tag = _bytes[_offset++];
-    if (tag & 0x1f == 0x1f) {
-      throw const FormatException('High-tag-number DER is unsupported');
-    }
-    if (expectedTag != null && tag != expectedTag) {
-      throw FormatException(
-        'Unexpected DER tag 0x${tag.toRadixString(16)}; '
-        'expected 0x${expectedTag.toRadixString(16)}',
-      );
-    }
-    if (_offset >= _bytes.length) {
-      throw const FormatException('Missing DER length');
-    }
-    var length = _bytes[_offset++];
-    if (length & 0x80 != 0) {
-      final count = length & 0x7f;
-      if (count == 0 || count > 4 || _offset + count > _bytes.length) {
-        throw const FormatException('Invalid DER length');
-      }
-      if (_bytes[_offset] == 0) {
-        throw const FormatException('Non-minimal DER length');
-      }
-      length = 0;
-      for (var index = 0; index < count; index++) {
-        length = (length << 8) | _bytes[_offset++];
-      }
-      if (length < 128) {
-        throw const FormatException('Non-minimal DER length');
-      }
-    }
-    final contentStart = _offset;
-    final end = contentStart + length;
-    if (end > _bytes.length) {
-      throw const FormatException('Truncated DER value');
-    }
-    _offset = end;
-    return _DerElement(
-      tag,
-      Uint8List.fromList(_bytes.sublist(start, end)),
-      Uint8List.fromList(_bytes.sublist(contentStart, end)),
-    );
-  }
-
-  void requireEnd() {
-    if (!isAtEnd) {
-      throw const FormatException('Trailing DER data');
-    }
-  }
-}
-
 List<int> _algorithmIdentifier(String oid) =>
     _sequence([..._oid(oid), ..._tlv(0x05, const [])]);
 
@@ -1319,28 +1244,6 @@ List<int> _tlv(int tag, List<int> content) {
     remaining >>= 8;
   }
   return [tag, 0x80 | lengthBytes.length, ...lengthBytes, ...content];
-}
-
-int _compareBytes(List<int> left, List<int> right) {
-  final common = left.length < right.length ? left.length : right.length;
-  for (var index = 0; index < common; index++) {
-    final difference = left[index] - right[index];
-    if (difference != 0) {
-      return difference;
-    }
-  }
-  return left.length - right.length;
-}
-
-bool _equalBytes(List<int> left, List<int> right) {
-  if (left.length != right.length) {
-    return false;
-  }
-  var difference = 0;
-  for (var index = 0; index < left.length; index++) {
-    difference |= left[index] ^ right[index];
-  }
-  return difference == 0;
 }
 
 void _validateBytes(List<int> bytes, String name, {bool allowEmpty = false}) {

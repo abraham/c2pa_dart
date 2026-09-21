@@ -3,5 +3,6 @@
 build/
 coverage/
 doc/api/
+pubspec_overrides.yaml
 
 node_modules/

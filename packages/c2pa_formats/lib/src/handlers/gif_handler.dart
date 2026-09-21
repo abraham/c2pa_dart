@@ -5,6 +5,7 @@ import 'package:c2pa_io/c2pa_io.dart';
 
 import '../asset_format.dart';
 import '../asset_handler.dart';
+import '../byte_compare.dart';
 import '../errors.dart';
 import '../hash_layout.dart';
 import '../xmp.dart';
@@ -108,9 +109,9 @@ final class GifAssetHandler
   Future<bool> detect(RandomAccessByteSource source) async {
     if (await source.length < 6) return false;
     final header = await source.read(ByteRange(0, 6));
-    return _equalRange(header, 0, _signature) &&
-        (_equalRange(header, 3, _version87a) ||
-            _equalRange(header, 3, _version89a));
+    return bytesEqualAt(header, 0, _signature) &&
+        (bytesEqualAt(header, 3, _version87a) ||
+            bytesEqualAt(header, 3, _version89a));
   }
 
   @override
@@ -400,9 +401,9 @@ final class GifAssetHandler
 
     final cursor = _GifCursor(source, sourceLength);
     final header = await cursor.readBytes(6);
-    if (!_equalRange(header, 0, _signature) ||
-        (!_equalRange(header, 3, _version87a) &&
-            !_equalRange(header, 3, _version89a))) {
+    if (!bytesEqualAt(header, 0, _signature) ||
+        (!bytesEqualAt(header, 3, _version87a) &&
+            !bytesEqualAt(header, 3, _version89a))) {
       throw const MalformedAssetFormatException(
         'GIF data has an invalid header or version.',
       );
@@ -445,11 +446,11 @@ final class GifAssetHandler
               final identifier = await cursor.readBytes(8);
               final authentication = await cursor.readBytes(3);
               final isC2pa =
-                  _equalBytes(identifier, _applicationIdentifier) &&
-                  _equalBytes(authentication, _authenticationCode);
+                  bytesEqual(identifier, _applicationIdentifier) &&
+                  bytesEqual(authentication, _authenticationCode);
               final isXmp =
-                  _equalBytes(identifier, _xmpIdentifier) &&
-                  _equalBytes(authentication, _xmpAuthenticationCode);
+                  bytesEqual(identifier, _xmpIdentifier) &&
+                  bytesEqual(authentication, _xmpAuthenticationCode);
               if ((isC2pa || isXmp) && encounteredImage) {
                 throw const MalformedAssetFormatException(
                   'C2PA and XMP GIF application extensions must precede image data.',
@@ -689,17 +690,6 @@ final class GifAssetHandler
       ByteRange(start, end),
       chunkSize: 64 * 1024,
     );
-  }
-
-  static bool _equalBytes(List<int> left, List<int> right) =>
-      left.length == right.length && _equalRange(left, 0, right);
-
-  static bool _equalRange(List<int> bytes, int offset, List<int> expected) {
-    if (offset + expected.length > bytes.length) return false;
-    for (var index = 0; index < expected.length; index++) {
-      if (bytes[offset + index] != expected[index]) return false;
-    }
-    return true;
   }
 }
 

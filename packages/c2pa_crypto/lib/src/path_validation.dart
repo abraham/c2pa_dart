@@ -3,7 +3,9 @@ import 'dart:typed_data';
 import 'package:cryptography/cryptography.dart' as cryptography;
 import 'package:webcrypto/webcrypto.dart' as webcrypto;
 
+import 'byte_compare.dart';
 import 'certificate_profile.dart';
+import 'der_reader.dart';
 import 'ecdsa_signature.dart';
 import 'hash_algorithm.dart';
 import 'signing_algorithm.dart';
@@ -344,7 +346,7 @@ Future<CertificatePathValidationResult> _validateCertificatePath(
 
   final leafHash = await HashAlgorithm.sha256.digest(leaf.der);
   if (policy._allowedEndEntitySha256Hashes.any(
-    (allowed) => _equalBytes(allowed, leafHash),
+    (allowed) => constantTimeBytesEqual(allowed, leafHash),
   )) {
     if (policy.requiredCertificatePolicyOids.isNotEmpty &&
         !_certificatePoliciesMatch(
@@ -480,7 +482,7 @@ final class _PathBuilder {
   ) async {
     final current = path.last;
     if (_isAnchor(current)) {
-      if (_equalBytes(current.subject.der, current.issuer.der)) {
+      if (bytesEqual(current.subject.der, current.issuer.der)) {
         try {
           if (!await _verifyCertificateSignature(current, current)) {
             issues.add(
@@ -538,7 +540,7 @@ final class _PathBuilder {
 
     var issuers = candidates
         .where(
-          (candidate) => _equalBytes(candidate.subject.der, current.issuer.der),
+          (candidate) => bytesEqual(candidate.subject.der, current.issuer.der),
         )
         .toList();
     final authorityKeyIdentifier = current.authorityKeyIdentifier;
@@ -546,10 +548,10 @@ final class _PathBuilder {
       issuers = issuers.where((candidate) {
         final subjectKeyIdentifier = candidate.subjectKeyIdentifier;
         return subjectKeyIdentifier == null ||
-            _equalBytes(subjectKeyIdentifier, authorityKeyIdentifier);
+            bytesEqual(subjectKeyIdentifier, authorityKeyIdentifier);
       }).toList();
     }
-    issuers.sort((left, right) => _compareBytes(left.der, right.der));
+    issuers.sort((left, right) => compareBytes(left.der, right.der));
     // A self-issued certificate is its own issuer candidate. It terminates the
     // path rather than extending it: if it were a configured trust anchor the
     // walk would already have stopped above, so reaching here means the chain
@@ -559,7 +561,7 @@ final class _PathBuilder {
     // RFC 3161 timestamp whose TSA ships its own root in the CMS certificate
     // set. Genuine multi-certificate cycles are still caught below.
     issuers = issuers
-        .where((candidate) => !_equalBytes(candidate.der, current.der))
+        .where((candidate) => !bytesEqual(candidate.der, current.der))
         .toList();
     if (issuers.isEmpty) {
       issues.add(
@@ -573,7 +575,7 @@ final class _PathBuilder {
     }
 
     for (final issuer in issuers) {
-      if (path.any((certificate) => _equalBytes(certificate.der, issuer.der))) {
+      if (path.any((certificate) => bytesEqual(certificate.der, issuer.der))) {
         issues.add(
           CertificatePathIssue(
             CertificatePathIssueCode.loopDetected,
@@ -703,7 +705,7 @@ final class _PathBuilder {
   }
 
   bool _isAnchor(X509Certificate certificate) =>
-      anchors.any((anchor) => _equalBytes(anchor.der, certificate.der));
+      anchors.any((anchor) => bytesEqual(anchor.der, certificate.der));
 }
 
 CertificatePathIssue? _validateNameConstraints(
@@ -941,7 +943,7 @@ bool _subdomainMatches(String name, String constraint) =>
     name.length > constraint.length && name.endsWith(constraint);
 
 bool _isSelfIssued(X509Certificate certificate) =>
-    _equalBytes(certificate.subject.der, certificate.issuer.der);
+    bytesEqual(certificate.subject.der, certificate.issuer.der);
 
 int _minimum(int left, int right) => left < right ? left : right;
 
@@ -1128,8 +1130,8 @@ bool _nullOrAbsentParameters(List<int>? parameters) =>
     return null;
   }
   try {
-    final sequence = _SignatureDerReader(der).single(0x30);
-    final reader = _SignatureDerReader(sequence);
+    final sequence = DerReader(der).single(0x30);
+    final reader = DerReader(sequence);
     var hashOid = '1.3.14.3.2.26';
     var mgfHashOid = '1.3.14.3.2.26';
     var saltLength = 20;
@@ -1172,8 +1174,8 @@ bool _nullOrAbsentParameters(List<int>? parameters) =>
 }
 
 (String, List<int>?) _signatureAlgorithm(List<int> der) {
-  final sequence = _SignatureDerReader(der).single(0x30);
-  final reader = _SignatureDerReader(sequence);
+  final sequence = DerReader(der).single(0x30);
+  final reader = DerReader(sequence);
   final oid = _decodeOid(reader.read(0x06).content);
   final parameters = reader.isAtEnd ? null : reader.read().encoded;
   if (!reader.isAtEnd) {
@@ -1183,7 +1185,7 @@ bool _nullOrAbsentParameters(List<int>? parameters) =>
 }
 
 int _signatureInteger(List<int> der) {
-  final bytes = _SignatureDerReader(der).single(0x02);
+  final bytes = DerReader(der).single(0x02);
   if (bytes.isEmpty ||
       bytes.first & 0x80 != 0 ||
       (bytes.length > 1 && bytes.first == 0 && bytes[1] & 0x80 == 0)) {
@@ -1237,75 +1239,6 @@ String _decodeOid(List<int> bytes) {
   return [firstArc, first - firstArc * BigInt.from(40), ...values].join('.');
 }
 
-final class _SignatureDerValue {
-  const _SignatureDerValue(this.tag, this.content, this.encoded);
-
-  final int tag;
-  final List<int> content;
-  final List<int> encoded;
-}
-
-final class _SignatureDerReader {
-  _SignatureDerReader(this.bytes);
-
-  final List<int> bytes;
-  int offset = 0;
-
-  bool get isAtEnd => offset == bytes.length;
-
-  _SignatureDerValue read([int? expectedTag]) {
-    final start = offset;
-    if (offset >= bytes.length) {
-      throw const FormatException('Truncated signature parameters');
-    }
-    final tag = bytes[offset++];
-    if (tag & 0x1f == 0x1f || (expectedTag != null && tag != expectedTag)) {
-      throw const FormatException('Invalid signature parameter tag');
-    }
-    if (offset >= bytes.length) {
-      throw const FormatException('Truncated signature parameters');
-    }
-    final first = bytes[offset++];
-    int length;
-    if (first < 0x80) {
-      length = first;
-    } else {
-      final count = first & 0x7f;
-      if (count == 0 ||
-          count > 4 ||
-          count > bytes.length - offset ||
-          bytes[offset] == 0) {
-        throw const FormatException('Invalid signature parameter length');
-      }
-      length = 0;
-      for (var index = 0; index < count; index++) {
-        length = length << 8 | bytes[offset++];
-      }
-      if (length < 0x80) {
-        throw const FormatException('Non-minimal signature parameter length');
-      }
-    }
-    if (length > bytes.length - offset) {
-      throw const FormatException('Truncated signature parameter value');
-    }
-    final contentStart = offset;
-    offset += length;
-    return _SignatureDerValue(
-      tag,
-      bytes.sublist(contentStart, offset),
-      bytes.sublist(start, offset),
-    );
-  }
-
-  List<int> single(int tag) {
-    final value = read(tag);
-    if (!isAtEnd) {
-      throw const FormatException('Trailing signature parameter data');
-    }
-    return value.content;
-  }
-}
-
 String _criticalExtensionMessage(String oid) {
   const unsupported = {
     '2.5.29.30': 'name constraints',
@@ -1349,27 +1282,4 @@ List<Uint8List> _copyHashes(Iterable<List<int>> values) {
     result.add(Uint8List.fromList(value));
   }
   return List.unmodifiable(result);
-}
-
-bool _equalBytes(List<int> left, List<int> right) {
-  if (left.length != right.length) {
-    return false;
-  }
-  for (var index = 0; index < left.length; index++) {
-    if (left[index] != right[index]) {
-      return false;
-    }
-  }
-  return true;
-}
-
-int _compareBytes(List<int> left, List<int> right) {
-  final length = left.length < right.length ? left.length : right.length;
-  for (var index = 0; index < length; index++) {
-    final comparison = left[index].compareTo(right[index]);
-    if (comparison != 0) {
-      return comparison;
-    }
-  }
-  return left.length.compareTo(right.length);
 }

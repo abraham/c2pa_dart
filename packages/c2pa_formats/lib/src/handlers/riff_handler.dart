@@ -5,6 +5,7 @@ import 'package:c2pa_io/c2pa_io.dart';
 
 import '../asset_format.dart';
 import '../asset_handler.dart';
+import '../byte_compare.dart';
 import '../errors.dart';
 import '../hash_layout.dart';
 import '../xmp.dart';
@@ -145,7 +146,7 @@ final class RiffAssetHandler
   Future<bool> detect(RandomAccessByteSource source) async {
     if (await source.length < 12) return false;
     final header = await source.read(ByteRange(0, 12));
-    return _equalRange(header, 0, _riff) && _equalRange(header, 8, _formType);
+    return bytesEqualAt(header, 0, _riff) && bytesEqualAt(header, 8, _formType);
   }
 
   @override
@@ -418,7 +419,7 @@ final class RiffAssetHandler
     );
     late int width;
     late int height;
-    if (_equalBytes(image.id, _vp8l)) {
+    if (bytesEqual(image.id, _vp8l)) {
       if (bytes.length < 5 || bytes[0] != 0x2f) {
         throw const MalformedAssetFormatException(
           'The WebP VP8L dimensions are malformed.',
@@ -604,7 +605,7 @@ final class RiffAssetHandler
       );
     }
     final header = await source.read(ByteRange(offset, offset + 12));
-    if (!_equalRange(header, 0, _riff)) {
+    if (!bytesEqualAt(header, 0, _riff)) {
       throw MalformedAssetFormatException('Expected RIFF at offset $offset.');
     }
     final declaredSize = _uint32Little(header, 4);
@@ -613,7 +614,7 @@ final class RiffAssetHandler
         'A RIFF chunk must include a four-byte form type.',
       );
     }
-    if (!_equalRange(header, 8, expectedForm)) {
+    if (!bytesEqualAt(header, 8, expectedForm)) {
       throw const MalformedAssetFormatException(
         'The RIFF asset has an unexpected form type.',
       );
@@ -663,7 +664,7 @@ final class RiffAssetHandler
           actualLength: end,
         );
       }
-      if (collectManifest && _equalRange(chunkHeader, 0, _c2pa)) {
+      if (collectManifest && bytesEqualAt(chunkHeader, 0, _c2pa)) {
         if (dataLength > maxManifestSize) {
           throw AssetLimitExceededException(
             limit: maxManifestSize,
@@ -679,7 +680,7 @@ final class RiffAssetHandler
             dataLength: dataLength,
           ),
         );
-      } else if (collectManifest && _equalRange(chunkHeader, 0, _xmp)) {
+      } else if (collectManifest && bytesEqualAt(chunkHeader, 0, _xmp)) {
         if (dataLength > maxXmpSize) {
           throw AssetLimitExceededException(
             limit: maxXmpSize,
@@ -695,7 +696,7 @@ final class RiffAssetHandler
             dataLength: dataLength,
           ),
         );
-      } else if (collectManifest && _equalRange(chunkHeader, 0, _vp8x)) {
+      } else if (collectManifest && bytesEqualAt(chunkHeader, 0, _vp8x)) {
         vp8xChunk ??= _RiffChunk(
           id: _vp8x,
           offset: chunkOffset,
@@ -705,8 +706,8 @@ final class RiffAssetHandler
         );
       } else if (collectManifest &&
           imageChunk == null &&
-          (_equalRange(chunkHeader, 0, _vp8) ||
-              _equalRange(chunkHeader, 0, _vp8l))) {
+          (bytesEqualAt(chunkHeader, 0, _vp8) ||
+              bytesEqualAt(chunkHeader, 0, _vp8l))) {
         imageChunk = _RiffChunk(
           id: Uint8List.fromList(chunkHeader.sublist(0, 4)),
           offset: chunkOffset,
@@ -767,17 +768,6 @@ final class RiffAssetHandler
       (bytes[offset + 1] << 8) |
       (bytes[offset + 2] << 16) |
       (bytes[offset + 3] << 24);
-
-  static bool _equalRange(List<int> bytes, int offset, List<int> expected) {
-    if (offset + expected.length > bytes.length) return false;
-    for (var index = 0; index < expected.length; index++) {
-      if (bytes[offset + index] != expected[index]) return false;
-    }
-    return true;
-  }
-
-  static bool _equalBytes(List<int> left, List<int> right) =>
-      left.length == right.length && _equalRange(left, 0, right);
 
   Uint8List _normalizeXmpPayload(Uint8List bytes) {
     try {

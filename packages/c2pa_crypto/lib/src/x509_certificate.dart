@@ -1,6 +1,9 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'byte_compare.dart';
+import 'der_reader.dart';
+
 /// A parsed X.509 algorithm identifier.
 final class X509AlgorithmIdentifier {
   /// Creates an AlgorithmIdentifier with OID and optional encoded parameters.
@@ -373,7 +376,7 @@ final class X509Certificate {
   }) {
     _validateBytes(input);
     final der = Uint8List.fromList(input);
-    final rootReader = _DerReader(der);
+    final rootReader = DerReader(der);
     final certificate = rootReader.read(0x30);
     rootReader.requireEnd();
     final certificateReader = certificate.reader();
@@ -474,7 +477,7 @@ const supportedX509CriticalExtensionOids = <String>{
   _inhibitAnyPolicyOid,
 };
 
-_ParsedTbs _parseTbs(_DerValue tbs) {
+_ParsedTbs _parseTbs(DerValue tbs) {
   final reader = tbs.reader();
   var version = 0;
   if (reader.peekTag() == 0xa0) {
@@ -611,7 +614,7 @@ _ParsedTbs _parseTbs(_DerValue tbs) {
   );
 }
 
-X509AlgorithmIdentifier _parseAlgorithmIdentifier(_DerValue value) {
+X509AlgorithmIdentifier _parseAlgorithmIdentifier(DerValue value) {
   final reader = value.reader();
   final oid = _parseOid(reader.read(0x06));
   final parameters = reader.isAtEnd ? null : reader.read().encoded;
@@ -619,7 +622,7 @@ X509AlgorithmIdentifier _parseAlgorithmIdentifier(_DerValue value) {
   return X509AlgorithmIdentifier(oid, parameters);
 }
 
-X509DistinguishedName _parseName(_DerValue value) {
+X509DistinguishedName _parseName(DerValue value) {
   final attributes = <X509NameAttribute>[];
   final reader = value.reader();
   while (!reader.isAtEnd) {
@@ -629,7 +632,7 @@ X509DistinguishedName _parseName(_DerValue value) {
     while (!setReader.isAtEnd) {
       final attributeValue = setReader.read(0x30);
       if (previous != null &&
-          _compareBytes(previous, attributeValue.encoded) > 0) {
+          compareBytes(previous, attributeValue.encoded) > 0) {
         throw const FormatException('RDN SET is not DER-sorted');
       }
       previous = attributeValue.encoded;
@@ -646,7 +649,7 @@ X509DistinguishedName _parseName(_DerValue value) {
   return X509DistinguishedName(attributes, value.encoded);
 }
 
-String _parseDirectoryString(_DerValue value) {
+String _parseDirectoryString(DerValue value) {
   switch (value.tag) {
     case 0x0c:
       try {
@@ -681,7 +684,7 @@ String _parseDirectoryString(_DerValue value) {
   }
 }
 
-DateTime _parseTime(_DerValue value) {
+DateTime _parseTime(DerValue value) {
   if (value.content.any((byte) => byte > 0x7f)) {
     throw const FormatException('Certificate time is not ASCII');
   }
@@ -728,7 +731,7 @@ int _digits(String value, int start, int end) {
   return int.parse(part);
 }
 
-List<X509Extension> _parseExtensions(_DerValue explicit) {
+List<X509Extension> _parseExtensions(DerValue explicit) {
   final explicitReader = explicit.reader();
   final sequence = explicitReader.read(0x30);
   explicitReader.requireEnd();
@@ -853,7 +856,7 @@ Uint8List? _parseAuthorityKeyIdentifier(List<int> der) {
       }
     } else {
       _parsePositiveInteger(
-        _DerValue(tag: 0x02, encoded: value.encoded, content: value.content),
+        DerValue(tag: 0x02, encoded: value.encoded, content: value.content),
       );
     }
   }
@@ -967,7 +970,7 @@ X509NameConstraints _parseNameConstraints(List<int> der) {
   return X509NameConstraints(permitted: permitted, excluded: excluded);
 }
 
-X509NameConstraint _parseGeneralSubtree(_DerValue subtree) {
+X509NameConstraint _parseGeneralSubtree(DerValue subtree) {
   final reader = subtree.reader();
   final base = reader.read();
   late X509NameConstraint constraint;
@@ -1023,11 +1026,7 @@ X509NameConstraint _parseGeneralSubtree(_DerValue subtree) {
     }
     lastTag = distance.tag;
     final value = _parseNonNegativeInteger(
-      _DerValue(
-        tag: 0x02,
-        encoded: distance.encoded,
-        content: distance.content,
-      ),
+      DerValue(tag: 0x02, encoded: distance.encoded, content: distance.content),
     );
     if (distance.tag == 0x80 && value == BigInt.zero) {
       throw const FormatException(
@@ -1107,7 +1106,7 @@ X509PolicyConstraints _parsePolicyConstraints(List<int> der) {
     }
     lastTag = field.tag;
     final value = _parseSmallInteger(
-      _DerValue(tag: 0x02, encoded: field.encoded, content: field.content),
+      DerValue(tag: 0x02, encoded: field.encoded, content: field.content),
     );
     if (field.tag == 0x80) {
       requireExplicitPolicy = value;
@@ -1202,15 +1201,15 @@ void _validateIpMask(List<int> mask) {
   }
 }
 
-_DerValue _single(List<int> der, int tag) {
+DerValue _single(List<int> der, int tag) {
   _validateBytes(der);
-  final reader = _DerReader(Uint8List.fromList(der));
+  final reader = DerReader(Uint8List.fromList(der));
   final value = reader.read(tag);
   reader.requireEnd();
   return value;
 }
 
-_BitString _parseBitString(_DerValue value) {
+_BitString _parseBitString(DerValue value) {
   if (value.content.isEmpty) {
     throw const FormatException('BIT STRING is missing unused-bit count');
   }
@@ -1223,13 +1222,13 @@ _BitString _parseBitString(_DerValue value) {
   return _BitString(value.content.sublist(1), unusedBits);
 }
 
-void _validateImplicitBitString(_DerValue value) {
+void _validateImplicitBitString(DerValue value) {
   _parseBitString(
-    _DerValue(tag: 0x03, encoded: value.encoded, content: value.content),
+    DerValue(tag: 0x03, encoded: value.encoded, content: value.content),
   );
 }
 
-bool _parseBoolean(_DerValue value) {
+bool _parseBoolean(DerValue value) {
   if (value.content.length != 1 ||
       (value.content.first != 0 && value.content.first != 0xff)) {
     throw const FormatException('Invalid DER BOOLEAN');
@@ -1237,7 +1236,7 @@ bool _parseBoolean(_DerValue value) {
   return value.content.first == 0xff;
 }
 
-int _parseSmallInteger(_DerValue value) {
+int _parseSmallInteger(DerValue value) {
   final integer = _parseNonNegativeInteger(value);
   if (integer > BigInt.from(0x7fffffff)) {
     throw const FormatException('INTEGER is too large');
@@ -1245,7 +1244,7 @@ int _parseSmallInteger(_DerValue value) {
   return integer.toInt();
 }
 
-BigInt _parsePositiveInteger(_DerValue value, {int? maxBytes}) {
+BigInt _parsePositiveInteger(DerValue value, {int? maxBytes}) {
   final integer = _parseNonNegativeInteger(value, maxBytes: maxBytes);
   if (integer == BigInt.zero) {
     throw const FormatException('INTEGER must be positive');
@@ -1253,7 +1252,7 @@ BigInt _parsePositiveInteger(_DerValue value, {int? maxBytes}) {
   return integer;
 }
 
-BigInt _parseNonNegativeInteger(_DerValue value, {int? maxBytes}) {
+BigInt _parseNonNegativeInteger(DerValue value, {int? maxBytes}) {
   final bytes = value.content;
   if (bytes.isEmpty ||
       bytes.first & 0x80 != 0 ||
@@ -1271,7 +1270,7 @@ BigInt _parseNonNegativeInteger(_DerValue value, {int? maxBytes}) {
   return result;
 }
 
-String _parseOid(_DerValue value) {
+String _parseOid(DerValue value) {
   if (value.content.isEmpty) {
     throw const FormatException('OID must not be empty');
   }
@@ -1320,18 +1319,7 @@ bool _equalNullableBytes(List<int>? left, List<int>? right) {
   if (left == null || right == null) {
     return left == right;
   }
-  return _compareBytes(left, right) == 0;
-}
-
-int _compareBytes(List<int> left, List<int> right) {
-  final length = left.length < right.length ? left.length : right.length;
-  for (var index = 0; index < length; index++) {
-    final comparison = left[index].compareTo(right[index]);
-    if (comparison != 0) {
-      return comparison;
-    }
-  }
-  return left.length.compareTo(right.length);
+  return compareBytes(left, right) == 0;
 }
 
 void _validateBytes(List<int> input) {
@@ -1395,89 +1383,4 @@ final class _BitString {
 
   final Uint8List bytes;
   final int unusedBits;
-}
-
-final class _DerValue {
-  const _DerValue({
-    required this.tag,
-    required this.encoded,
-    required this.content,
-  });
-
-  final int tag;
-  final Uint8List encoded;
-  final Uint8List content;
-
-  _DerReader reader() => _DerReader(content);
-}
-
-final class _DerReader {
-  _DerReader(this.bytes);
-
-  final Uint8List bytes;
-  int offset = 0;
-
-  bool get isAtEnd => offset == bytes.length;
-
-  int? peekTag() => isAtEnd ? null : bytes[offset];
-
-  _DerValue read([int? expectedTag]) {
-    final start = offset;
-    final tag = _readByte();
-    if (tag & 0x1f == 0x1f) {
-      throw const FormatException('High-tag-number DER is unsupported');
-    }
-    if (expectedTag != null && tag != expectedTag) {
-      throw FormatException(
-        'Expected DER tag 0x${expectedTag.toRadixString(16)}, '
-        'found 0x${tag.toRadixString(16)}',
-      );
-    }
-    final length = _readLength();
-    if (length > bytes.length - offset) {
-      throw const FormatException('DER value exceeds its container');
-    }
-    final contentStart = offset;
-    offset += length;
-    return _DerValue(
-      tag: tag,
-      encoded: Uint8List.fromList(bytes.sublist(start, offset)),
-      content: Uint8List.fromList(bytes.sublist(contentStart, offset)),
-    );
-  }
-
-  void requireEnd() {
-    if (!isAtEnd) {
-      throw const FormatException('Trailing DER data');
-    }
-  }
-
-  int _readLength() {
-    final first = _readByte();
-    if (first < 0x80) {
-      return first;
-    }
-    final count = first & 0x7f;
-    if (count == 0) {
-      throw const FormatException('Indefinite DER length is forbidden');
-    }
-    if (count > 4 || count > bytes.length - offset || bytes[offset] == 0) {
-      throw const FormatException('Invalid DER length');
-    }
-    var length = 0;
-    for (var index = 0; index < count; index++) {
-      length = length << 8 | _readByte();
-    }
-    if (length < 0x80) {
-      throw const FormatException('Non-minimal DER length');
-    }
-    return length;
-  }
-
-  int _readByte() {
-    if (offset >= bytes.length) {
-      throw const FormatException('Truncated DER');
-    }
-    return bytes[offset++];
-  }
 }

@@ -1,3 +1,4 @@
+import 'der_reader.dart';
 import 'signing_algorithm.dart';
 import 'x509_certificate.dart';
 
@@ -354,8 +355,8 @@ _parsePssParameters(List<int>? der) {
     return null;
   }
   try {
-    final root = _ProfileDerReader(der).single(0x30);
-    final reader = _ProfileDerReader(root);
+    final root = DerReader(der).single(0x30);
+    final reader = DerReader(root);
     var hashOid = '1.3.14.3.2.26';
     var mgfHashOid = '1.3.14.3.2.26';
     var saltLength = 20;
@@ -395,8 +396,8 @@ _parsePssParameters(List<int>? der) {
 }
 
 (String, List<int>?) _parseProfileAlgorithm(List<int> der) {
-  final sequence = _ProfileDerReader(der).single(0x30);
-  final reader = _ProfileDerReader(sequence);
+  final sequence = DerReader(der).single(0x30);
+  final reader = DerReader(sequence);
   final oid = _profileOid(reader.read(0x06).content);
   final parameters = reader.isAtEnd ? null : reader.read().encoded;
   if (!reader.isAtEnd) {
@@ -406,7 +407,7 @@ _parsePssParameters(List<int>? der) {
 }
 
 int _parseProfileInteger(List<int> der) {
-  final bytes = _ProfileDerReader(der).single(0x02);
+  final bytes = DerReader(der).single(0x02);
   if (bytes.isEmpty ||
       bytes.first & 0x80 != 0 ||
       (bytes.length > 1 && bytes.first == 0 && bytes[1] & 0x80 == 0)) {
@@ -487,73 +488,4 @@ String _profileOid(List<int> bytes) {
       : BigInt.two;
   final secondArc = first - firstArc * BigInt.from(40);
   return [firstArc, secondArc, ...values].join('.');
-}
-
-final class _ProfileDerValue {
-  const _ProfileDerValue(this.tag, this.content, this.encoded);
-
-  final int tag;
-  final List<int> content;
-  final List<int> encoded;
-}
-
-final class _ProfileDerReader {
-  _ProfileDerReader(this.bytes);
-
-  final List<int> bytes;
-  int offset = 0;
-
-  bool get isAtEnd => offset == bytes.length;
-
-  _ProfileDerValue read([int? expectedTag]) {
-    final start = offset;
-    if (offset >= bytes.length) {
-      throw const FormatException('Truncated DER');
-    }
-    final tag = bytes[offset++];
-    if (tag & 0x1f == 0x1f || (expectedTag != null && tag != expectedTag)) {
-      throw const FormatException('Invalid DER tag');
-    }
-    if (offset >= bytes.length) {
-      throw const FormatException('Truncated DER');
-    }
-    final firstLength = bytes[offset++];
-    int length;
-    if (firstLength < 0x80) {
-      length = firstLength;
-    } else {
-      final count = firstLength & 0x7f;
-      if (count == 0 ||
-          count > 4 ||
-          count > bytes.length - offset ||
-          bytes[offset] == 0) {
-        throw const FormatException('Invalid DER length');
-      }
-      length = 0;
-      for (var index = 0; index < count; index++) {
-        length = length << 8 | bytes[offset++];
-      }
-      if (length < 0x80) {
-        throw const FormatException('Non-minimal DER length');
-      }
-    }
-    if (length > bytes.length - offset) {
-      throw const FormatException('Truncated DER value');
-    }
-    final contentStart = offset;
-    offset += length;
-    return _ProfileDerValue(
-      tag,
-      bytes.sublist(contentStart, offset),
-      bytes.sublist(start, offset),
-    );
-  }
-
-  List<int> single(int tag) {
-    final value = read(tag);
-    if (!isAtEnd) {
-      throw const FormatException('Trailing DER data');
-    }
-    return value.content;
-  }
 }

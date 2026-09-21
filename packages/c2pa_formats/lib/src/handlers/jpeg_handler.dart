@@ -6,6 +6,7 @@ import 'package:c2pa_io/c2pa_io.dart';
 
 import '../asset_format.dart';
 import '../asset_handler.dart';
+import '../byte_compare.dart';
 import '../errors.dart';
 import '../hash_layout.dart';
 import '../xmp.dart';
@@ -437,7 +438,7 @@ final class JpegAssetHandler
       final prefix = await source.read(
         ByteRange(box.offset + 4, box.offset + 4 + signature.length),
       );
-      if (!_startsWith(prefix, signature)) continue;
+      if (!bytesEqualAt(prefix, 0, signature)) continue;
       if (found != null) {
         throw const MalformedAssetFormatException(
           'The JPEG contains duplicate standard XMP APP1 segments.',
@@ -773,7 +774,7 @@ final class JpegAssetHandler
         final payloadPrefix = await source.read(
           ByteRange(payloadOffset, payloadOffset + prefixLength),
         );
-        if (_startsWith(payloadPrefix, _commonIdentifier)) {
+        if (bytesEqualAt(payloadPrefix, 0, _commonIdentifier)) {
           packets.add(
             _JpegXtPacket(
               markerOffset: markerStart,
@@ -966,7 +967,7 @@ final class JpegAssetHandler
         final payloadPrefix = await source.read(
           ByteRange(payloadOffset, payloadOffset + prefixLength),
         );
-        if (_startsWith(payloadPrefix, _commonIdentifier)) {
+        if (bytesEqualAt(payloadPrefix, 0, _commonIdentifier)) {
           packets.add(
             _JpegXtPacket(
               markerOffset: markerStart,
@@ -1088,10 +1089,6 @@ final class JpegAssetHandler
     }
     return (await source.read(ByteRange(offset, offset + 1)))[0];
   }
-
-  static bool _startsWith(List<int> bytes, List<int> prefix) =>
-      bytes.length >= prefix.length &&
-      _equalRange(bytes, 0, Uint8List.fromList(prefix), 0, prefix.length);
 
   static bool _equalRange(
     List<int> left,

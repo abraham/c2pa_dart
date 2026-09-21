@@ -1,5 +1,7 @@
 import 'dart:typed_data';
 
+import 'byte_compare.dart';
+import 'der_reader.dart';
 import 'ocsp.dart';
 import 'path_validation.dart';
 import 'x509_certificate.dart';
@@ -201,7 +203,7 @@ final class X509Crl {
   factory X509Crl.parse(List<int> input) {
     _validateBytes(input);
     final der = Uint8List.fromList(input);
-    final root = _DerReader(der);
+    final root = DerReader(der);
     final certificateList = root.read(0x30);
     root.requireEnd();
     final reader = certificateList.reader();
@@ -242,7 +244,7 @@ final class X509Crl {
         .where(
           (entry) =>
               entry.serialNumber == serialNumber &&
-              _equalBytes(entry.effectiveIssuer.der, issuer.der),
+              constantTimeBytesEqual(entry.effectiveIssuer.der, issuer.der),
         )
         .toList();
     if (matches.length > 1) {
@@ -398,7 +400,7 @@ Future<CrlVerificationResult> verifyCrl(
 
   try {
     final issuedByTargetIssuer =
-        _equalBytes(certificate.issuer.der, issuer.subject.der) &&
+        constantTimeBytesEqual(certificate.issuer.der, issuer.subject.der) &&
         await verifySignatureWithCertificatePublicKey(
           certificate: issuer,
           signatureAlgorithm: certificate.signatureAlgorithm,
@@ -429,7 +431,7 @@ Future<CrlVerificationResult> verifyCrl(
     );
   }
 
-  if (!_equalBytes(crl.issuer.der, signer.subject.der)) {
+  if (!constantTimeBytesEqual(crl.issuer.der, signer.subject.der)) {
     issues.add(
       const CrlIssue(
         CrlIssueCode.wrongIssuer,
@@ -439,7 +441,7 @@ Future<CrlVerificationResult> verifyCrl(
   }
   final aki = crl.authorityKeyIdentifier;
   final ski = signer.subjectKeyIdentifier;
-  if (aki != null && (ski == null || !_equalBytes(aki, ski))) {
+  if (aki != null && (ski == null || !constantTimeBytesEqual(aki, ski))) {
     issues.add(
       const CrlIssue(
         CrlIssueCode.authorityKeyIdentifierMismatch,
@@ -541,7 +543,7 @@ Future<CrlVerificationResult> verifyCrl(
     try {
       final targetPoints = _certificateDistributionPoints(certificate);
       if (!targetPoints.any(
-        (point) => _equalBytes(point, scope!.distributionPointDer!),
+        (point) => constantTimeBytesEqual(point, scope!.distributionPointDer!),
       )) {
         issues.add(
           const CrlIssue(
@@ -728,7 +730,7 @@ RevocationEvidenceResult evaluateRevocationEvidence({
   );
 }
 
-_ParsedTbsCrl _parseTbsCertList(_DerValue tbs) {
+_ParsedTbsCrl _parseTbsCertList(DerValue tbs) {
   final reader = tbs.reader();
   var version = 1;
   if (!reader.isAtEnd && reader.peekTag() == 0x02) {
@@ -825,7 +827,8 @@ _ParsedTbsCrl _parseTbsCertList(_DerValue tbs) {
     );
   }
   if (entries.any(
-        (entry) => !_equalBytes(entry.effectiveIssuer.der, issuer.der),
+        (entry) =>
+            !constantTimeBytesEqual(entry.effectiveIssuer.der, issuer.der),
       ) &&
       issuingDistributionPoint?.indirectCrl != true) {
     throw const FormatException(
@@ -860,7 +863,7 @@ _ParsedTbsCrl _parseTbsCertList(_DerValue tbs) {
   X509DistinguishedName effectiveIssuer,
   bool hadExtensions,
 })
-_parseRevokedEntry(_DerValue value, X509DistinguishedName inheritedIssuer) {
+_parseRevokedEntry(DerValue value, X509DistinguishedName inheritedIssuer) {
   final reader = value.reader();
   final serial = _parsePositiveInteger(reader.read(0x02));
   final revocationTime = _parseTime(reader.read());
@@ -1012,7 +1015,7 @@ CrlIssuingDistributionPoint _parseIssuingDistributionPoint(List<int> der) {
   );
 }
 
-Set<CrlRevocationReason> _parseReasonFlags(_DerValue field) {
+Set<CrlRevocationReason> _parseReasonFlags(DerValue field) {
   final bits = _parseImplicitBitString(field);
   final reasons = <CrlRevocationReason>{};
   final significantBits = bits.bytes.length * 8 - bits.unusedBits;
@@ -1027,7 +1030,7 @@ Set<CrlRevocationReason> _parseReasonFlags(_DerValue field) {
   return Set.unmodifiable(reasons);
 }
 
-bool _parseImplicitTrue(_DerValue value) {
+bool _parseImplicitTrue(DerValue value) {
   if (value.content.length != 1 || value.content.single != 0xff) {
     throw const FormatException(
       'IssuingDistributionPoint DEFAULT false must be omitted',
@@ -1112,7 +1115,7 @@ List<Uint8List> _certificateDistributionPoints(X509Certificate certificate) {
   return List.unmodifiable(points);
 }
 
-List<_CrlExtension> _parseExtensions(_DerValue sequence) {
+List<_CrlExtension> _parseExtensions(DerValue sequence) {
   final reader = sequence.reader();
   final extensions = <_CrlExtension>[];
   final seen = <String>{};
@@ -1141,7 +1144,7 @@ List<_CrlExtension> _parseExtensions(_DerValue sequence) {
   return extensions;
 }
 
-X509AlgorithmIdentifier _parseAlgorithmIdentifier(_DerValue value) {
+X509AlgorithmIdentifier _parseAlgorithmIdentifier(DerValue value) {
   final reader = value.reader();
   final oid = _parseOid(reader.read(0x06));
   final parameters = reader.isAtEnd ? null : reader.read().encoded;
@@ -1157,9 +1160,9 @@ bool _sameAlgorithm(
     ((left.parametersDer == null && right.parametersDer == null) ||
         (left.parametersDer != null &&
             right.parametersDer != null &&
-            _equalBytes(left.parametersDer!, right.parametersDer!)));
+            constantTimeBytesEqual(left.parametersDer!, right.parametersDer!)));
 
-DateTime _parseTime(_DerValue value) {
+DateTime _parseTime(DerValue value) {
   final text = String.fromCharCodes(value.content);
   late int year;
   late int offset;
@@ -1195,7 +1198,7 @@ DateTime _parseTime(_DerValue value) {
   return result;
 }
 
-DateTime _parseGeneralizedTime(_DerValue value) {
+DateTime _parseGeneralizedTime(DerValue value) {
   final text = String.fromCharCodes(value.content);
   if (value.tag != 0x18 || !RegExp(r'^\d{14}Z$').hasMatch(text)) {
     throw const FormatException('Invalid GeneralizedTime');
@@ -1218,7 +1221,7 @@ DateTime _parseGeneralizedTime(_DerValue value) {
   return result;
 }
 
-Uint8List _parseBitString(_DerValue value) {
+Uint8List _parseBitString(DerValue value) {
   final bits = _parseImplicitBitString(value);
   if (bits.unusedBits != 0 || bits.bytes.isEmpty) {
     throw const FormatException(
@@ -1228,7 +1231,7 @@ Uint8List _parseBitString(_DerValue value) {
   return bits.bytes;
 }
 
-_BitString _parseImplicitBitString(_DerValue value) {
+_BitString _parseImplicitBitString(DerValue value) {
   if (value.content.isEmpty) {
     throw const FormatException('BIT STRING is missing unused-bit count');
   }
@@ -1241,7 +1244,7 @@ _BitString _parseImplicitBitString(_DerValue value) {
   return _BitString(value.content.sublist(1), unused);
 }
 
-bool _parseBoolean(_DerValue value) {
+bool _parseBoolean(DerValue value) {
   if (value.content.length != 1 ||
       (value.content.single != 0 && value.content.single != 0xff)) {
     throw const FormatException('Invalid DER BOOLEAN');
@@ -1249,7 +1252,7 @@ bool _parseBoolean(_DerValue value) {
   return value.content.single == 0xff;
 }
 
-int _parseSmallInteger(_DerValue value) {
+int _parseSmallInteger(DerValue value) {
   final parsed = _parseNonNegativeInteger(value);
   if (parsed > BigInt.from(0x7fffffff)) {
     throw const FormatException('INTEGER is too large');
@@ -1257,7 +1260,7 @@ int _parseSmallInteger(_DerValue value) {
   return parsed.toInt();
 }
 
-BigInt _parsePositiveInteger(_DerValue value) {
+BigInt _parsePositiveInteger(DerValue value) {
   final parsed = _parseNonNegativeInteger(value);
   if (parsed == BigInt.zero) {
     throw const FormatException('INTEGER must be positive');
@@ -1265,7 +1268,7 @@ BigInt _parsePositiveInteger(_DerValue value) {
   return parsed;
 }
 
-BigInt _parseNonNegativeInteger(_DerValue value) {
+BigInt _parseNonNegativeInteger(DerValue value) {
   final bytes = value.content;
   if (bytes.isEmpty ||
       bytes.first & 0x80 != 0 ||
@@ -1279,7 +1282,7 @@ BigInt _parseNonNegativeInteger(_DerValue value) {
   return result;
 }
 
-String _parseOid(_DerValue value) {
+String _parseOid(DerValue value) {
   if (value.content.isEmpty) {
     throw const FormatException('Empty OBJECT IDENTIFIER');
   }
@@ -1314,9 +1317,9 @@ String _parseOid(_DerValue value) {
   ].join('.');
 }
 
-_DerValue _single(List<int> bytes, int tag) {
+DerValue _single(List<int> bytes, int tag) {
   _validateBytes(bytes);
-  final reader = _DerReader(bytes);
+  final reader = DerReader(bytes);
   final value = reader.read(tag);
   reader.requireEnd();
   return value;
@@ -1359,93 +1362,6 @@ final class _BitString {
   const _BitString(this.bytes, this.unusedBits);
   final Uint8List bytes;
   final int unusedBits;
-}
-
-final class _DerValue {
-  const _DerValue(this.tag, this.encoded, this.content);
-  final int tag;
-  final Uint8List encoded;
-  final Uint8List content;
-  _DerReader reader() => _DerReader(content);
-}
-
-final class _DerReader {
-  _DerReader(List<int> bytes) : _bytes = Uint8List.fromList(bytes);
-  final Uint8List _bytes;
-  int _offset = 0;
-  bool get isAtEnd => _offset == _bytes.length;
-
-  int peekTag() {
-    if (isAtEnd) {
-      throw const FormatException('Unexpected end of DER');
-    }
-    return _bytes[_offset];
-  }
-
-  _DerValue read([int? expectedTag]) {
-    if (isAtEnd) {
-      throw const FormatException('Unexpected end of DER');
-    }
-    final start = _offset;
-    final tag = _bytes[_offset++];
-    if (tag & 0x1f == 0x1f) {
-      throw const FormatException('High-tag-number DER is unsupported');
-    }
-    if (expectedTag != null && tag != expectedTag) {
-      throw FormatException(
-        'Unexpected DER tag 0x${tag.toRadixString(16)}; '
-        'expected 0x${expectedTag.toRadixString(16)}',
-      );
-    }
-    if (isAtEnd) {
-      throw const FormatException('Missing DER length');
-    }
-    var length = _bytes[_offset++];
-    if (length & 0x80 != 0) {
-      final count = length & 0x7f;
-      if (count == 0 || count > 4 || _offset + count > _bytes.length) {
-        throw const FormatException('Invalid DER length');
-      }
-      if (_bytes[_offset] == 0) {
-        throw const FormatException('Non-minimal DER length');
-      }
-      length = 0;
-      for (var index = 0; index < count; index++) {
-        length = (length << 8) | _bytes[_offset++];
-      }
-      if (length < 128) {
-        throw const FormatException('Non-minimal DER length');
-      }
-    }
-    final contentStart = _offset;
-    final end = contentStart + length;
-    if (end > _bytes.length) {
-      throw const FormatException('Truncated DER value');
-    }
-    _offset = end;
-    return _DerValue(
-      tag,
-      Uint8List.fromList(_bytes.sublist(start, end)),
-      Uint8List.fromList(_bytes.sublist(contentStart, end)),
-    );
-  }
-
-  void requireEnd() {
-    if (!isAtEnd) {
-      throw const FormatException('Trailing DER data');
-    }
-  }
-}
-
-bool _equalBytes(List<int> left, List<int> right) {
-  if (left.length != right.length) {
-    return false;
-  }
-  var difference = 0;
-  for (var index = 0; index < left.length; index++) {
-    difference |= left[index] ^ right[index];
-  }
-  return difference == 0;
 }
 
 void _validateBytes(List<int> bytes) {
