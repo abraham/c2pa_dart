@@ -18,7 +18,7 @@ print(changed); // [0, 0]
 ```
 
 See
-[`example/mutate.dart`](https://github.com/abraham/c2pa_dart/blob/main/packages/c2pa_testkit/example/mutate.dart).
+[`example/c2pa_testkit.dart`](https://github.com/abraham/c2pa_dart/blob/main/packages/c2pa_testkit/example/c2pa_testkit.dart).
 
 ## Security and defaults
 
@@ -54,12 +54,11 @@ Brotli-compressed manifest generation. The repository's vendored conformance
 corpora are excluded from the published package; applications must provide
 their own fixtures when using fixture-loading and differential helpers.
 
-Licensed under **MIT OR Apache-2.0**, at your option. See
-[`LICENSE`](https://github.com/abraham/c2pa_dart/blob/main/packages/c2pa_testkit/LICENSE),
-[`LICENSE-MIT`](https://github.com/abraham/c2pa_dart/blob/main/packages/c2pa_testkit/LICENSE-MIT),
-and
-[`LICENSE-APACHE`](https://github.com/abraham/c2pa_dart/blob/main/packages/c2pa_testkit/LICENSE-APACHE).
-Copyright is held by contributors to
+Licensed under the **MIT License** ([`LICENSE`](https://github.com/abraham/c2pa_dart/blob/main/packages/c2pa_testkit/LICENSE)).
+As an alternative, you may instead use this package under the **Apache
+License, Version 2.0**
+([`LICENSE-APACHE`](https://github.com/abraham/c2pa_dart/blob/main/packages/c2pa_testkit/LICENSE-APACHE)), so the package is offered
+as `MIT OR Apache-2.0`, at your option. Copyright is held by contributors to
 c2pa_dart.
 
 Vendored fixtures remain under their documented upstream terms.

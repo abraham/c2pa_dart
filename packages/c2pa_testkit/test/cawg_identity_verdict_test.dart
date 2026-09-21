@@ -3,13 +3,7 @@ library;
 
 import 'dart:convert';
 
-// ignore: implementation_imports
-import 'package:c2pa/src/reader.dart';
-// ignore: implementation_imports
-import 'package:c2pa/src/report.dart';
-// ignore: implementation_imports
-import 'package:c2pa/src/validation.dart';
-import 'package:c2pa_io/c2pa_io.dart';
+import 'package:c2pa/c2pa.dart';
 import 'package:c2pa_testkit/c2pa_testkit_vm.dart';
 import 'package:test/test.dart';
 

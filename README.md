@@ -39,8 +39,8 @@ packages with the matching caret constraint. Wait for each dependency version
 to become available on pub.dev before publishing its dependents.
 `scripts/publish.sh` automates this ordering and waiting; see
 [Releasing](#releasing). Every published
-package includes `LICENSE`, `LICENSE-MIT`, and `LICENSE-APACHE` and is offered
-under `MIT OR Apache-2.0`. All packages publish source links to the canonical
+package includes `LICENSE` (the MIT License) and `LICENSE-APACHE`, and is
+offered under `MIT OR Apache-2.0`. All packages publish source links to the canonical
 [`abraham/c2pa_dart`](https://github.com/abraham/c2pa_dart) repository and use
 its [shared issue tracker](https://github.com/abraham/c2pa_dart/issues).
 
@@ -351,9 +351,11 @@ scripts/web-compile.sh
 scripts/lint-commits.sh
 ```
 
-CI runs five jobs: `commits` (commit message conventions, described below),
+CI runs six jobs: `commits` (commit message conventions, described below),
 `dart` (formatting, analysis, the compatibility ledger, shell script linting,
-and every package test on pinned Dart for Linux, macOS, and Windows), `browser`
+and every package test on pinned Dart for Linux, macOS, and Windows),
+`Package health` (`dart pub publish --dry-run` and pana over every package),
+`browser`
 (Chrome tests and web-safe barrel compiles), `flutter` (a representative
 Flutter stable analysis/test job), and `c2pa-rs conformance`, described below.
 
@@ -373,6 +375,7 @@ root, and can be run from any directory.
 | `web-compile.sh` | Compiles every web-targeting package barrel to JavaScript |
 | `browser-test.sh` | Runs the `c2pa_crypto` browser suites on Chrome |
 | `test-packages.sh` | Runs package test suites under whichever SDK is on `PATH` |
+| `package-health.sh` | Runs `dart pub publish --dry-run` and pana over every package, gating the pub.dev checks the analyzer cannot see |
 | `lint-commits.sh` | Checks that new commit messages follow Conventional Commits |
 | `update-changelogs.sh` | Routes the commits made since the last release into the changelogs |
 | `bump-version.sh` | Sets one version across all seven packages, their sibling constraints, and their changelogs |
@@ -553,9 +556,11 @@ private keys are not vendored.
 
 ## License
 
-Licensed under **MIT OR Apache-2.0**, at your option. See
-[`LICENSE`](LICENSE), [`LICENSE-MIT`](LICENSE-MIT), and
-[`LICENSE-APACHE`](LICENSE-APACHE). Copyright is held by contributors to
+Licensed under the **MIT License**, which is the text in
+[`LICENSE`](LICENSE). As an alternative, you may instead use this project under
+the **Apache License, Version 2.0**, whose text is in
+[`LICENSE-APACHE`](LICENSE-APACHE). The project is therefore offered as
+`MIT OR Apache-2.0`, at your option. Copyright is held by contributors to
 c2pa_dart.
 
 Third-party vendored material remains under its documented upstream terms.

@@ -5,7 +5,7 @@ import 'package:c2pa_io/c2pa_io_vm.dart';
 
 Future<void> main(List<String> arguments) async {
   if (arguments.length != 1) {
-    stderr.writeln('usage: dart run example/inspect.dart <asset>');
+    stderr.writeln('usage: dart run example/c2pa.dart <asset>');
     exitCode = 64;
     return;
   }

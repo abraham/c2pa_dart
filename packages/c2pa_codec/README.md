@@ -16,7 +16,7 @@ final decoded = decodeCbor(encoded);
 ```
 
 See
-[`example/cbor.dart`](https://github.com/abraham/c2pa_dart/blob/main/packages/c2pa_codec/example/cbor.dart).
+[`example/c2pa_codec.dart`](https://github.com/abraham/c2pa_dart/blob/main/packages/c2pa_codec/example/c2pa_codec.dart).
 
 ## Security and defaults
 
@@ -40,11 +40,9 @@ claimed. Format-level parity belongs to `c2pa_formats` and is partial for a
 number of containers.
 
 The vendored Brotli decoder retains its own MIT license under
-`lib/src/brotli_vendor`. This package is licensed under
-**MIT OR Apache-2.0**, at your option. See
-[`LICENSE`](https://github.com/abraham/c2pa_dart/blob/main/packages/c2pa_codec/LICENSE),
-[`LICENSE-MIT`](https://github.com/abraham/c2pa_dart/blob/main/packages/c2pa_codec/LICENSE-MIT),
-and
-[`LICENSE-APACHE`](https://github.com/abraham/c2pa_dart/blob/main/packages/c2pa_codec/LICENSE-APACHE).
-Copyright is held by contributors to
+`lib/src/brotli_vendor`. This package is licensed under the **MIT License**
+([`LICENSE`](https://github.com/abraham/c2pa_dart/blob/main/packages/c2pa_codec/LICENSE)). As an alternative, you may instead use
+this package under the **Apache License, Version 2.0**
+([`LICENSE-APACHE`](https://github.com/abraham/c2pa_dart/blob/main/packages/c2pa_codec/LICENSE-APACHE)), so the package is offered
+as `MIT OR Apache-2.0`, at your option. Copyright is held by contributors to
 c2pa_dart.

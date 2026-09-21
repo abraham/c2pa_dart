@@ -130,13 +130,12 @@ does not generate Brotli-compressed stores. Remote trust-list fetching is not
 implemented, and the CLI never selects a system trust store implicitly.
 
 See
-[`example/inspect.dart`](https://github.com/abraham/c2pa_dart/blob/main/packages/c2patool_dart/example/inspect.dart)
+[`example/c2patool_dart.dart`](https://github.com/abraham/c2pa_dart/blob/main/packages/c2patool_dart/example/c2patool_dart.dart)
 for invoking the CLI API from Dart.
 
-Licensed under **MIT OR Apache-2.0**, at your option. See
-[`LICENSE`](https://github.com/abraham/c2pa_dart/blob/main/packages/c2patool_dart/LICENSE),
-[`LICENSE-MIT`](https://github.com/abraham/c2pa_dart/blob/main/packages/c2patool_dart/LICENSE-MIT),
-and
-[`LICENSE-APACHE`](https://github.com/abraham/c2pa_dart/blob/main/packages/c2patool_dart/LICENSE-APACHE).
-Copyright is held by contributors to
+Licensed under the **MIT License** ([`LICENSE`](https://github.com/abraham/c2pa_dart/blob/main/packages/c2patool_dart/LICENSE)).
+As an alternative, you may instead use this package under the **Apache
+License, Version 2.0**
+([`LICENSE-APACHE`](https://github.com/abraham/c2pa_dart/blob/main/packages/c2patool_dart/LICENSE-APACHE)), so the package is offered
+as `MIT OR Apache-2.0`, at your option. Copyright is held by contributors to
 c2pa_dart.

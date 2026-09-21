@@ -1,7 +1,6 @@
 import 'dart:convert';
 
-// ignore: implementation_imports
-import 'package:c2pa/src/validation.dart';
+import 'package:c2pa/c2pa.dart';
 
 /// Projects Dart and oracle output into the same JSON-compatible shape.
 abstract interface class NormalizedProjection<T> {

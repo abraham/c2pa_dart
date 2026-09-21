@@ -1,7 +1,4 @@
-// ignore: implementation_imports
-import 'package:c2pa/src/validation.dart';
-// ignore: implementation_imports
-import 'package:c2pa/src/validation_code.dart';
+import 'package:c2pa/c2pa.dart';
 import 'package:c2pa_testkit/c2pa_testkit.dart';
 import 'package:test/test.dart';
 

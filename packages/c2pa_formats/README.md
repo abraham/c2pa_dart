@@ -20,7 +20,7 @@ print(result.format);
 ```
 
 See
-[`example/detect_format.dart`](https://github.com/abraham/c2pa_dart/blob/main/packages/c2pa_formats/example/detect_format.dart).
+[`example/c2pa_formats.dart`](https://github.com/abraham/c2pa_dart/blob/main/packages/c2pa_formats/example/c2pa_formats.dart).
 
 ## Security and defaults
 
@@ -44,10 +44,9 @@ read/write paths are useful but full baseline parity is not claimed. PDF
 reading is tracked as complete; PDF mutation remains partial. Brotli
 compression is handled above this layer and generation is not available.
 
-Licensed under **MIT OR Apache-2.0**, at your option. See
-[`LICENSE`](https://github.com/abraham/c2pa_dart/blob/main/packages/c2pa_formats/LICENSE),
-[`LICENSE-MIT`](https://github.com/abraham/c2pa_dart/blob/main/packages/c2pa_formats/LICENSE-MIT),
-and
-[`LICENSE-APACHE`](https://github.com/abraham/c2pa_dart/blob/main/packages/c2pa_formats/LICENSE-APACHE).
-Copyright is held by contributors to
+Licensed under the **MIT License** ([`LICENSE`](https://github.com/abraham/c2pa_dart/blob/main/packages/c2pa_formats/LICENSE)).
+As an alternative, you may instead use this package under the **Apache
+License, Version 2.0**
+([`LICENSE-APACHE`](https://github.com/abraham/c2pa_dart/blob/main/packages/c2pa_formats/LICENSE-APACHE)), so the package is offered
+as `MIT OR Apache-2.0`, at your option. Copyright is held by contributors to
 c2pa_dart.

@@ -4,19 +4,9 @@ library;
 import 'dart:convert';
 import 'dart:typed_data';
 
-// ignore: implementation_imports
-import 'package:c2pa/src/cawg_identity.dart';
-// ignore: implementation_imports
-import 'package:c2pa/src/context.dart';
-// ignore: implementation_imports
-import 'package:c2pa/src/reader.dart';
-// ignore: implementation_imports
-import 'package:c2pa/src/remote_manifest.dart';
-// ignore: implementation_imports
-import 'package:c2pa/src/report.dart';
+import 'package:c2pa/c2pa.dart';
 import 'package:c2pa_codec/c2pa_codec.dart';
 import 'package:c2pa_crypto/c2pa_crypto.dart';
-import 'package:c2pa_io/c2pa_io.dart';
 import 'package:c2pa_testkit/c2pa_testkit.dart';
 import 'package:c2pa_testkit/c2pa_testkit_vm.dart';
 import 'package:test/test.dart';

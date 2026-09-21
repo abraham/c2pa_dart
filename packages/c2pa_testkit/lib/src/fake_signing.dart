@@ -2,8 +2,7 @@ import 'dart:async';
 import 'dart:collection';
 import 'dart:typed_data';
 
-// ignore: implementation_imports
-import 'package:c2pa/src/signing.dart';
+import 'package:c2pa/c2pa.dart';
 
 typedef FakeSignCallback = FutureOr<Uint8List> Function(Uint8List data);
 

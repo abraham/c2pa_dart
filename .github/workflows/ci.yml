@@ -88,6 +88,35 @@ jobs:
         run: dart run tool/check_compatibility.dart
       - name: Test every package
         run: dart run tool/test_all.dart
+  packages:
+    # pub.dev scores the archive it receives, not the tree the analyzer sees.
+    # An example pana does not recognise by name, or a LICENSE holding a
+    # dual-license pointer rather than license text, both pass `dart analyze`
+    # and both silently cost points on the published page.
+    name: Package health
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      PUB_CACHE: ${{ runner.temp }}/pub-cache
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: ${{ env.DART_SDK_VERSION }}
+      - name: Cache pub packages
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.PUB_CACHE }}
+          key: pub-${{ runner.os }}-dart-${{ env.DART_SDK_VERSION }}-${{ hashFiles('pubspec.lock', '**/pubspec.yaml') }}
+          restore-keys: |
+            pub-${{ runner.os }}-dart-${{ env.DART_SDK_VERSION }}-
+      - name: Resolve workspace
+        run: dart pub get
+      - name: Validate publishable packages
+        # Runs `dart pub publish --dry-run` and pana over every package. The
+        # script activates pana itself rather than pinning a scoring tool into
+        # a pubspec that ships to consumers.
+        run: scripts/package-health.sh
   conformance:
     # Every other job reads assets this SDK also wrote, so they can only prove
     # self-consistency. This one compares against the c2pa-rs reference build

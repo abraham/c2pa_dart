@@ -22,7 +22,7 @@ print(reader.validationResults);
 ```
 
 See
-[`example/inspect.dart`](https://github.com/abraham/c2pa_dart/blob/main/packages/c2pa/example/inspect.dart)
+[`example/c2pa.dart`](https://github.com/abraham/c2pa_dart/blob/main/packages/c2pa/example/c2pa.dart)
 for a VM file example.
 Signing keys remain caller owned; configure a `C2paSigner` backed by a
 keystore, HSM, or service when building manifests.
@@ -55,10 +55,9 @@ baseline, while most asset-container mutation paths have partial format parity
 and should be tested against an application's corpus. API stability and full
 cross-format parity are not claimed before 1.0.
 
-Licensed under **MIT OR Apache-2.0**, at your option. See
-[`LICENSE`](https://github.com/abraham/c2pa_dart/blob/main/packages/c2pa/LICENSE),
-[`LICENSE-MIT`](https://github.com/abraham/c2pa_dart/blob/main/packages/c2pa/LICENSE-MIT),
-and
-[`LICENSE-APACHE`](https://github.com/abraham/c2pa_dart/blob/main/packages/c2pa/LICENSE-APACHE).
-Copyright is held by contributors to
+Licensed under the **MIT License** ([`LICENSE`](https://github.com/abraham/c2pa_dart/blob/main/packages/c2pa/LICENSE)).
+As an alternative, you may instead use this package under the **Apache
+License, Version 2.0**
+([`LICENSE-APACHE`](https://github.com/abraham/c2pa_dart/blob/main/packages/c2pa/LICENSE-APACHE)), so the package is offered
+as `MIT OR Apache-2.0`, at your option. Copyright is held by contributors to
 c2pa_dart.

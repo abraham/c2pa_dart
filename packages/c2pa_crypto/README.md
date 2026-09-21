@@ -18,7 +18,7 @@ print(digest.length); // 32
 ```
 
 See
-[`example/hash.dart`](https://github.com/abraham/c2pa_dart/blob/main/packages/c2pa_crypto/example/hash.dart).
+[`example/c2pa_crypto.dart`](https://github.com/abraham/c2pa_dart/blob/main/packages/c2pa_crypto/example/c2pa_crypto.dart).
 
 ## Security and defaults
 
@@ -41,10 +41,9 @@ Supported C2PA algorithms include SHA-256/384/512, ES256/384/512,
 PS256/384/512, and Ed25519, subject to backend support. This package does not
 provide an operating-system trust-store policy or network transport.
 
-Licensed under **MIT OR Apache-2.0**, at your option. See
-[`LICENSE`](https://github.com/abraham/c2pa_dart/blob/main/packages/c2pa_crypto/LICENSE),
-[`LICENSE-MIT`](https://github.com/abraham/c2pa_dart/blob/main/packages/c2pa_crypto/LICENSE-MIT),
-and
-[`LICENSE-APACHE`](https://github.com/abraham/c2pa_dart/blob/main/packages/c2pa_crypto/LICENSE-APACHE).
-Copyright is held by contributors to
+Licensed under the **MIT License** ([`LICENSE`](https://github.com/abraham/c2pa_dart/blob/main/packages/c2pa_crypto/LICENSE)).
+As an alternative, you may instead use this package under the **Apache
+License, Version 2.0**
+([`LICENSE-APACHE`](https://github.com/abraham/c2pa_dart/blob/main/packages/c2pa_crypto/LICENSE-APACHE)), so the package is offered
+as `MIT OR Apache-2.0`, at your option. Copyright is held by contributors to
 c2pa_dart.

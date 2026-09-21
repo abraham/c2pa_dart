@@ -17,7 +17,7 @@ final bytes = await source.read(ByteRange(1, 3));
 ```
 
 See
-[`example/read_bytes.dart`](https://github.com/abraham/c2pa_dart/blob/main/packages/c2pa_io/example/read_bytes.dart)
+[`example/c2pa_io.dart`](https://github.com/abraham/c2pa_dart/blob/main/packages/c2pa_io/example/c2pa_io.dart)
 for a complete example.
 
 ## Security and limits
@@ -42,10 +42,9 @@ This package provides I/O primitives, not C2PA parsing or validation. Browser
 support uses `Blob`; writable browser filesystem integration remains the
 application's responsibility.
 
-Licensed under **MIT OR Apache-2.0**, at your option. See
-[`LICENSE`](https://github.com/abraham/c2pa_dart/blob/main/packages/c2pa_io/LICENSE),
-[`LICENSE-MIT`](https://github.com/abraham/c2pa_dart/blob/main/packages/c2pa_io/LICENSE-MIT),
-and
-[`LICENSE-APACHE`](https://github.com/abraham/c2pa_dart/blob/main/packages/c2pa_io/LICENSE-APACHE).
-Copyright is held by contributors to
+Licensed under the **MIT License** ([`LICENSE`](https://github.com/abraham/c2pa_dart/blob/main/packages/c2pa_io/LICENSE)).
+As an alternative, you may instead use this package under the **Apache
+License, Version 2.0**
+([`LICENSE-APACHE`](https://github.com/abraham/c2pa_dart/blob/main/packages/c2pa_io/LICENSE-APACHE)), so the package is offered
+as `MIT OR Apache-2.0`, at your option. Copyright is held by contributors to
 c2pa_dart.
