@@ -1,27 +1,33 @@
 import 'dart:io';
 
-const _packages = <String>[
-  'c2pa_io',
-  'c2pa_codec',
-  'c2pa_crypto',
-  'c2pa_formats',
-  'c2pa',
-  'c2pa_testkit',
-  'c2patool_dart',
+/// Directories with a `test/` suite, in dependency order.
+///
+/// `.` is the workspace root, whose suite covers the repository tooling in
+/// `tool/` rather than any published package.
+const _suites = <String>[
+  '.',
+  'packages/c2pa_io',
+  'packages/c2pa_codec',
+  'packages/c2pa_crypto',
+  'packages/c2pa_formats',
+  'packages/c2pa',
+  'packages/c2pa_testkit',
+  'packages/c2patool_dart',
 ];
 
 Future<void> main() async {
-  for (final package in _packages) {
-    final testDirectory = Directory('packages/$package/test');
+  for (final suite in _suites) {
+    final testDirectory = Directory('$suite/test');
     if (!testDirectory.existsSync()) {
       continue;
     }
 
-    stdout.writeln('==> Testing $package');
+    final label = suite == '.' ? 'workspace tooling' : suite.split('/').last;
+    stdout.writeln('==> Testing $label');
     final process = await Process.start(
       Platform.resolvedExecutable,
       const ['test'],
-      workingDirectory: 'packages/$package',
+      workingDirectory: suite,
       mode: ProcessStartMode.inheritStdio,
     );
     final result = await process.exitCode;

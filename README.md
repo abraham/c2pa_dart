@@ -343,18 +343,19 @@ From the repository root:
 
 ```sh
 dart pub get
-dart format --output=none --set-exit-if-changed packages tool scripts
+dart format --output=none --set-exit-if-changed packages tool test
 dart analyze
 dart run tool/check_compatibility.dart
 dart run tool/test_all.dart
 scripts/web-compile.sh
+scripts/lint-commits.sh
 ```
 
-CI runs four jobs: `dart` (formatting, analysis, the compatibility ledger,
-shell script linting, and every package test on pinned Dart for Linux, macOS,
-and Windows), `browser` (Chrome tests and web-safe barrel compiles), `flutter`
-(a representative Flutter stable analysis/test job), and `c2pa-rs conformance`,
-described below.
+CI runs five jobs: `commits` (commit message conventions, described below),
+`dart` (formatting, analysis, the compatibility ledger, shell script linting,
+and every package test on pinned Dart for Linux, macOS, and Windows), `browser`
+(Chrome tests and web-safe barrel compiles), `flutter` (a representative
+Flutter stable analysis/test job), and `c2pa-rs conformance`, described below.
 
 ### Scripts
 
@@ -372,10 +373,49 @@ root, and can be run from any directory.
 | `web-compile.sh` | Compiles every web-targeting package barrel to JavaScript |
 | `browser-test.sh` | Runs the `c2pa_crypto` browser suites on Chrome |
 | `test-packages.sh` | Runs package test suites under whichever SDK is on `PATH` |
+| `lint-commits.sh` | Checks that new commit messages follow Conventional Commits |
 | `bump-version.sh` | Sets one version across all seven packages, their sibling constraints, and their changelogs |
 | `publish.sh` | Validates and publishes the workspace to pub.dev in dependency order |
 
 `lib.sh` holds the shared helpers and is sourced rather than executed.
+
+### Commit messages
+
+Commits follow [Conventional Commits
+v1.0.0](https://www.conventionalcommits.org/en/v1.0.0/):
+
+```
+<type>[optional scope][optional !]: <description>
+
+[optional body]
+
+[optional footer(s)]
+```
+
+The `commits` CI job checks this with `scripts/lint-commits.sh`, which reports
+every violation in a message rather than stopping at the first:
+
+```sh
+scripts/lint-commits.sh                  # this branch against its base
+scripts/lint-commits.sh --base origin/main
+scripts/lint-commits.sh --range HEAD~3..HEAD
+```
+
+Accepted types are `build`, `chore`, `ci`, `docs`, `feat`, `fix`, `perf`,
+`refactor`, `revert`, `style`, and `test`. The specification permits any noun
+as a type, but an open set cannot catch `feature:` written where `feat:` was
+meant, which is the mistake worth catching. Pass `--types` to override the set
+and `--max-header-length` to change the 100 character subject limit, which is a
+convention rather than a rule of the specification.
+
+Only the commits a branch introduces are checked, measured from the merge base
+with the target branch. History predating the convention is therefore out of
+scope, and the repository's own root commit does not conform. Merge commits are
+skipped because their messages are generated rather than written.
+
+Breaking changes are marked with `!` before the colon, or with an uppercase
+`BREAKING CHANGE:` footer; the linter rejects a lower case footer token because
+the specification requires that one to be uppercase.
 
 ### Releasing
 

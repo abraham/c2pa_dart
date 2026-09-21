@@ -16,6 +16,30 @@ env:
   FLUTTER_VERSION: 3.47.5
 
 jobs:
+  commits:
+    # Commit messages are the one input CI cannot re-derive later, so they are
+    # checked before anything expensive runs.
+    name: Conventional Commits
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      PUB_CACHE: ${{ runner.temp }}/pub-cache
+      # Not a default variable; scripts/lint-commits.sh uses it on push events
+      # to bound the range to the commits actually being pushed.
+      GITHUB_EVENT_BEFORE: ${{ github.event.before }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The merge base with the target branch has to be reachable, which a
+          # shallow checkout cannot guarantee.
+          fetch-depth: 0
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: ${{ env.DART_SDK_VERSION }}
+      - name: Resolve workspace
+        run: dart pub get
+      - name: Check commit messages
+        run: scripts/lint-commits.sh
   dart:
     name: Dart ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
@@ -41,7 +65,7 @@ jobs:
       - name: Resolve workspace
         run: dart pub get
       - name: Check formatting
-        run: dart format --output=none --set-exit-if-changed packages tool
+        run: dart format --output=none --set-exit-if-changed packages tool test
       - name: Analyze workspace
         run: dart analyze
       - name: Lint shell scripts
