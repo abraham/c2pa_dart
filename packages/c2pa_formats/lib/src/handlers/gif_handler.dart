@@ -8,6 +8,7 @@ import '../asset_handler.dart';
 import '../byte_compare.dart';
 import '../errors.dart';
 import '../hash_layout.dart';
+import '../manifest_mutation.dart';
 import '../xmp.dart';
 import '../xmp_remote_reference.dart';
 
@@ -16,6 +17,7 @@ import '../xmp_remote_reference.dart';
 /// The manifest is stored in an application extension whose identifier is
 /// `C2PA_GIF` and whose authentication code is `01 00 00`.
 final class GifAssetHandler
+    with ManifestRewrite
     implements
         AssetHandler,
         DataHashLayoutProvider,
@@ -173,36 +175,6 @@ final class GifAssetHandler
   }
 
   @override
-  Future<void> embedManifest(
-    RandomAccessByteSource source,
-    Uint8List manifest,
-    WritableByteSink output,
-  ) => _rewrite(
-    source,
-    output,
-    manifest: manifest,
-    operation: _GifMutation.embed,
-  );
-
-  @override
-  Future<void> replaceManifest(
-    RandomAccessByteSource source,
-    Uint8List manifest,
-    WritableByteSink output,
-  ) => _rewrite(
-    source,
-    output,
-    manifest: manifest,
-    operation: _GifMutation.replace,
-  );
-
-  @override
-  Future<void> removeManifest(
-    RandomAccessByteSource source,
-    WritableByteSink output,
-  ) => _rewrite(source, output, operation: _GifMutation.remove);
-
-  @override
   Future<String?> readXmp(RandomAccessByteSource source) async {
     final inspection = await _inspect(source, captureXmp: true);
     final xmp = inspection.xmp;
@@ -315,10 +287,11 @@ final class GifAssetHandler
     await output.append(staged.toBytes());
   }
 
-  Future<void> _rewrite(
+  @override
+  Future<void> rewriteManifest(
     RandomAccessByteSource source,
     WritableByteSink output, {
-    required _GifMutation operation,
+    required ManifestMutation operation,
     Uint8List? manifest,
   }) async {
     if (await output.length != 0) {
@@ -335,10 +308,10 @@ final class GifAssetHandler
 
     final inspection = await _inspect(source);
     final existing = inspection.manifestBlock;
-    if (operation == _GifMutation.embed && existing != null) {
+    if (operation == ManifestMutation.embed && existing != null) {
       throw const ManifestAlreadyExistsException(AssetFormat.gif);
     }
-    if (operation != _GifMutation.embed && existing == null) {
+    if (operation != ManifestMutation.embed && existing == null) {
       throw const ManifestNotFoundException(AssetFormat.gif);
     }
 
@@ -356,7 +329,7 @@ final class GifAssetHandler
       );
     }
 
-    final insertionOffset = operation == _GifMutation.replace
+    final insertionOffset = operation == ManifestMutation.replace
         ? existing!.offset
         : inspection.preambleEnd;
     final staged = MemoryByteSink();
@@ -695,8 +668,6 @@ final class GifAssetHandler
 
 /// Backward-compatible alias for [GifAssetHandler].
 typedef GifHandler = GifAssetHandler;
-
-enum _GifMutation { embed, replace, remove }
 
 final class _GifBlock {
   const _GifBlock(this.offset, this.end);

@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'der_reader.dart';
 import 'signing_algorithm.dart';
 import 'x509_certificate.dart';
@@ -87,7 +89,18 @@ enum CertificateProfileIssueCode {
 
   /// A critical extension is present but not implemented by this SDK.
   unsupportedCriticalExtension,
+
+  /// An RSA public key is shorter than the minimum allowed modulus size.
+  rsaModulusTooSmall,
 }
+
+/// Smallest RSA modulus, in bits, accepted for C2PA signing and verification.
+///
+/// C2PA inherits the widely deployed 2048-bit floor; 1024-bit RSA is
+/// considered broken and must not be honoured just because a certificate
+/// carries a well-formed `RSASSA-PSS` algorithm identifier. Checking the
+/// algorithm without checking the key size would accept exactly that.
+const int minimumRsaModulusBits = 2048;
 
 /// One validation issue found in a certificate profile.
 final class CertificateProfileIssue {
@@ -287,6 +300,16 @@ List<CertificateProfileIssue> _validateCommon(
       ),
     );
   }
+  final modulusBits = _rsaModulusBits(certificate);
+  if (modulusBits != null && modulusBits < minimumRsaModulusBits) {
+    issues.add(
+      CertificateProfileIssue(
+        CertificateProfileIssueCode.rsaModulusTooSmall,
+        'RSA modulus is $modulusBits bits; '
+        'at least $minimumRsaModulusBits are required',
+      ),
+    );
+  }
   for (final extension in certificate.criticalUnknownExtensions) {
     issues.add(
       CertificateProfileIssue(
@@ -320,6 +343,43 @@ bool _keyMatchesAlgorithm(
       return keyAlgorithm.oid == '1.3.101.112' &&
           keyAlgorithm.parametersDer == null;
   }
+}
+
+/// Returns the RSA modulus size in bits, or `null` when [certificate] does not
+/// carry an RSA key or its `SubjectPublicKeyInfo` cannot be parsed.
+///
+/// A malformed key yields `null` rather than throwing: this runs inside issue
+/// collection, and structural key errors are surfaced by the parser that reads
+/// the key for signature verification.
+int? _rsaModulusBits(X509Certificate certificate) {
+  const rsaEncryptionOid = '1.2.840.113549.1.1.1';
+  const rsaPssOid = '1.2.840.113549.1.1.10';
+  final oid = certificate.subjectPublicKeyAlgorithm.oid;
+  if (oid != rsaEncryptionOid && oid != rsaPssOid) {
+    return null;
+  }
+  final Uint8List modulus;
+  try {
+    final key = DerReader(certificate.subjectPublicKey).single(0x30);
+    modulus = DerReader(key).read(0x02).content;
+  } on FormatException {
+    return null;
+  }
+  // The modulus is a non-negative DER INTEGER, so it may carry one leading
+  // zero byte purely to keep the high bit clear. Measure the value, not the
+  // encoding, or every key would appear eight bits larger than it is.
+  var index = 0;
+  while (index < modulus.length && modulus[index] == 0) {
+    index++;
+  }
+  if (index == modulus.length) {
+    return 0;
+  }
+  var topBits = 0;
+  for (var bit = modulus[index]; bit != 0; bit >>= 1) {
+    topBits++;
+  }
+  return (modulus.length - index - 1) * 8 + topBits;
 }
 
 bool _rsaKeyMatches(

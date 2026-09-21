@@ -5,10 +5,12 @@ import 'package:c2pa_io/c2pa_io.dart';
 
 import '../asset_format.dart';
 import '../asset_handler.dart';
+import '../byte_reader.dart';
 import '../errors.dart';
 import '../hash_layout.dart';
 import '../isobmff.dart';
 import '../isobmff_hash_layout.dart';
+import '../manifest_mutation.dart';
 import '../xmp.dart';
 import '../xmp_remote_reference.dart';
 
@@ -18,6 +20,7 @@ import '../xmp_remote_reference.dart';
 /// manifest is stored in a top-level `uuid` box with [c2paUuid]; XMP is stored
 /// in a `uuid` box with [xmpUuid].
 final class IsoBmffAssetHandler
+    with ManifestRewrite
     implements
         AssetHandler,
         DataHashLayoutProvider,
@@ -266,36 +269,6 @@ final class IsoBmffAssetHandler
   ).readFragmented(source, exclusions, version: version);
 
   @override
-  Future<void> embedManifest(
-    RandomAccessByteSource source,
-    Uint8List manifest,
-    WritableByteSink output,
-  ) => _rewrite(
-    source,
-    output,
-    operation: _IsoBmffMutation.embed,
-    manifest: manifest,
-  );
-
-  @override
-  Future<void> replaceManifest(
-    RandomAccessByteSource source,
-    Uint8List manifest,
-    WritableByteSink output,
-  ) => _rewrite(
-    source,
-    output,
-    operation: _IsoBmffMutation.replace,
-    manifest: manifest,
-  );
-
-  @override
-  Future<void> removeManifest(
-    RandomAccessByteSource source,
-    WritableByteSink output,
-  ) => _rewrite(source, output, operation: _IsoBmffMutation.remove);
-
-  @override
   Future<String?> readXmp(RandomAccessByteSource source) async {
     final inspection = await _inspect(source);
     final xmp = inspection.xmp;
@@ -474,7 +447,7 @@ final class IsoBmffAssetHandler
       );
     }
     final bytes = staged.toBytes();
-    final count = _uint32(bytes, start);
+    final count = readUint32Be(bytes, start);
     if (count > (node.box.end - start - 4) ~/ width ||
         start + 4 + count * width != node.box.end) {
       throw const MalformedAssetFormatException(
@@ -626,10 +599,11 @@ final class IsoBmffAssetHandler
     }
   }
 
-  Future<void> _rewrite(
+  @override
+  Future<void> rewriteManifest(
     RandomAccessByteSource source,
     WritableByteSink output, {
-    required _IsoBmffMutation operation,
+    required ManifestMutation operation,
     Uint8List? manifest,
   }) async {
     if (await output.length != 0) {
@@ -649,10 +623,10 @@ final class IsoBmffAssetHandler
       throw const UnsupportedIsoBmffFeatureException('fragmented streams');
     }
     final existing = inspection.manifest;
-    if (operation == _IsoBmffMutation.embed && existing != null) {
+    if (operation == ManifestMutation.embed && existing != null) {
       throw ManifestAlreadyExistsException(format);
     }
-    if (operation != _IsoBmffMutation.embed && existing == null) {
+    if (operation != ManifestMutation.embed && existing == null) {
       throw ManifestNotFoundException(format);
     }
 
@@ -791,7 +765,7 @@ final class IsoBmffAssetHandler
         );
       }
       final basic = await source.read(ByteRange(offset, offset + 8));
-      final size32 = _uint32(basic, 0);
+      final size32 = readUint32Be(basic, 0);
       final type = String.fromCharCodes(basic.sublist(4, 8));
       var headerSize = 8;
       var extended = false;
@@ -1038,20 +1012,11 @@ final class IsoBmffAssetHandler
     }
   }
 
-  static int _uint32(Uint8List bytes, int offset) =>
-      ByteData.sublistView(bytes).getUint32(offset, Endian.big);
-
-  static int _uint64(Uint8List bytes) {
-    final data = ByteData.sublistView(bytes);
-    final high = data.getUint32(0, Endian.big);
-    final low = data.getUint32(4, Endian.big);
-    if (high > 0x1fffff) {
-      throw const MalformedAssetFormatException(
+  static int _uint64(Uint8List bytes) =>
+      tryReadUint64Be(bytes, 0) ??
+      (throw const MalformedAssetFormatException(
         'ISO BMFF 64-bit size exceeds the supported address range.',
-      );
-    }
-    return high * 0x100000000 + low;
-  }
+      ));
 
   static bool _equal(List<int>? left, List<int> right) {
     if (left == null || left.length != right.length) return false;
@@ -1093,8 +1058,6 @@ final class IsoBmffAssetHandler
       brand.startsWith('iso') ||
       brand.startsWith('3g');
 }
-
-enum _IsoBmffMutation { embed, replace, remove }
 
 final class _ScanState {
   _ScanState(this.limit);

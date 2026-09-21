@@ -5,7 +5,9 @@ import 'package:c2pa_io/c2pa_io.dart';
 
 import '../asset_format.dart';
 import '../asset_handler.dart';
+import '../byte_reader.dart';
 import '../errors.dart';
+import '../manifest_mutation.dart';
 import '../zip_collection.dart';
 
 /// A ZIP-like archive handler for C2PA manifest entries.
@@ -13,6 +15,7 @@ import '../zip_collection.dart';
 /// Handles ZIP, EPUB, OOXML, OpenDocument, and OpenXPS containers. The
 /// manifest is stored as the uncompressed entry [manifestPath].
 final class ZipAssetHandler
+    with ManifestRewrite
     implements AssetHandler, ZipCollectionLayoutProvider {
   /// Creates a ZIP handler for one supported archive [format].
   const ZipAssetHandler({
@@ -237,39 +240,10 @@ final class ZipAssetHandler
   }
 
   @override
-  Future<void> embedManifest(
-    RandomAccessByteSource source,
-    Uint8List manifest,
-    WritableByteSink output,
-  ) => _rewrite(
-    source,
-    output,
-    operation: _ZipMutation.embed,
-    manifest: manifest,
-  );
-
-  @override
-  Future<void> replaceManifest(
-    RandomAccessByteSource source,
-    Uint8List manifest,
-    WritableByteSink output,
-  ) => _rewrite(
-    source,
-    output,
-    operation: _ZipMutation.replace,
-    manifest: manifest,
-  );
-
-  @override
-  Future<void> removeManifest(
-    RandomAccessByteSource source,
-    WritableByteSink output,
-  ) => _rewrite(source, output, operation: _ZipMutation.remove);
-
-  Future<void> _rewrite(
+  Future<void> rewriteManifest(
     RandomAccessByteSource source,
     WritableByteSink output, {
-    required _ZipMutation operation,
+    required ManifestMutation operation,
     Uint8List? manifest,
   }) async {
     if (await output.length != 0) {
@@ -286,10 +260,10 @@ final class ZipAssetHandler
 
     final inspection = await _inspect(source);
     final existing = inspection.manifest;
-    if (operation == _ZipMutation.embed && existing != null) {
+    if (operation == ManifestMutation.embed && existing != null) {
       throw ManifestAlreadyExistsException(format);
     }
-    if (operation != _ZipMutation.embed && existing == null) {
+    if (operation != ManifestMutation.embed && existing == null) {
       throw ManifestNotFoundException(format);
     }
 
@@ -499,8 +473,8 @@ final class ZipAssetHandler
     final tail = await source.read(ByteRange(tailStart, sourceLength));
     var relative = tail.length - 22;
     while (relative >= 0) {
-      if (_uint32(tail, relative) == _eocdSignature) {
-        final commentLength = _uint16(tail, relative + 20);
+      if (readUint32Le(tail, relative) == _eocdSignature) {
+        final commentLength = readUint16Le(tail, relative + 20);
         if (relative + 22 + commentLength == tail.length) break;
       }
       relative--;
@@ -512,17 +486,17 @@ final class ZipAssetHandler
     }
     final eocdOffset = tailStart + relative;
     final eocd = Uint8List.sublistView(tail, relative);
-    final disk = _uint16(eocd, 4);
-    final centralDisk = _uint16(eocd, 6);
-    final entriesOnDisk = _uint16(eocd, 8);
-    final totalEntries = _uint16(eocd, 10);
-    final size32 = _uint32(eocd, 12);
-    final offset32 = _uint32(eocd, 16);
+    final disk = readUint16Le(eocd, 4);
+    final centralDisk = readUint16Le(eocd, 6);
+    final entriesOnDisk = readUint16Le(eocd, 8);
+    final totalEntries = readUint16Le(eocd, 10);
+    final size32 = readUint32Le(eocd, 12);
+    final offset32 = readUint32Le(eocd, 16);
     if (disk != 0 || centralDisk != 0 || entriesOnDisk != totalEntries) {
       throw const UnsupportedZipFeatureException('multi-disk archives');
     }
     final comment = Uint8List.fromList(
-      eocd.sublist(22, 22 + _uint16(eocd, 20)),
+      eocd.sublist(22, 22 + readUint16Le(eocd, 20)),
     );
     final usesZip64 =
         totalEntries == _uint16Max ||
@@ -545,9 +519,9 @@ final class ZipAssetHandler
       );
     }
     final locator = await source.read(ByteRange(eocdOffset - 20, eocdOffset));
-    if (_uint32(locator, 0) != _zip64LocatorSignature ||
-        _uint32(locator, 4) != 0 ||
-        _uint32(locator, 16) != 1) {
+    if (readUint32Le(locator, 0) != _zip64LocatorSignature ||
+        readUint32Le(locator, 4) != 0 ||
+        readUint32Le(locator, 16) != 1) {
       throw const UnsupportedZipFeatureException(
         'multi-disk or malformed ZIP64 archives',
       );
@@ -559,7 +533,7 @@ final class ZipAssetHandler
       );
     }
     final fixed = await source.read(ByteRange(zip64Offset, zip64Offset + 56));
-    if (_uint32(fixed, 0) != _zip64EocdSignature) {
+    if (readUint32Le(fixed, 0) != _zip64EocdSignature) {
       throw const MalformedAssetFormatException(
         'The ZIP64 end record signature is invalid.',
       );
@@ -572,8 +546,8 @@ final class ZipAssetHandler
         'The ZIP64 end record size is invalid.',
       );
     }
-    if (_uint32(fixed, 16) != 0 ||
-        _uint32(fixed, 20) != 0 ||
+    if (readUint32Le(fixed, 16) != 0 ||
+        readUint32Le(fixed, 20) != 0 ||
         _uint64(fixed, 24) != _uint64(fixed, 32)) {
       throw const UnsupportedZipFeatureException('multi-disk ZIP64 archives');
     }
@@ -608,18 +582,18 @@ final class ZipAssetHandler
       );
     }
     final fixed = await source.read(ByteRange(offset, offset + 46));
-    if (_uint32(fixed, 0) != _centralSignature) {
+    if (readUint32Le(fixed, 0) != _centralSignature) {
       throw const MalformedAssetFormatException(
         'A ZIP central directory header signature is invalid.',
       );
     }
-    final flags = _uint16(fixed, 8);
+    final flags = readUint16Le(fixed, 8);
     _validateFlags(flags);
-    final compression = _uint16(fixed, 10);
+    final compression = readUint16Le(fixed, 10);
     _validateCompression(compression);
-    final nameLength = _uint16(fixed, 28);
-    final extraLength = _uint16(fixed, 30);
-    final commentLength = _uint16(fixed, 32);
+    final nameLength = readUint16Le(fixed, 28);
+    final extraLength = readUint16Le(fixed, 30);
+    final commentLength = readUint16Le(fixed, 32);
     if (nameLength == 0 || nameLength > maxNameLength) {
       throw AssetLimitExceededException(
         limit: maxNameLength,
@@ -641,10 +615,10 @@ final class ZipAssetHandler
     );
     final name = _decodeName(nameBytes, flags);
     final normalized = _normalizePath(name);
-    var uncompressedSize = _uint32(fixed, 24);
-    var compressedSize = _uint32(fixed, 20);
-    var localOffset = _uint32(fixed, 42);
-    var diskStart = _uint16(fixed, 34);
+    var uncompressedSize = readUint32Le(fixed, 24);
+    var compressedSize = readUint32Le(fixed, 20);
+    var localOffset = readUint32Le(fixed, 42);
+    var diskStart = readUint16Le(fixed, 34);
     final zip64 = _readZip64Extra(
       extra,
       uncompressed: uncompressedSize == _uint32Max,
@@ -668,14 +642,15 @@ final class ZipAssetHandler
       normalizedPath: normalized,
       flags: flags,
       compressionMethod: compression,
-      crc32: _uint32(fixed, 16),
+      crc32: readUint32Le(fixed, 16),
       compressedSize: compressedSize,
       uncompressedSize: uncompressedSize,
       localOffset: localOffset,
       centralOffset: offset,
       centralEnd: end,
       usesZip64Sizes:
-          _uint32(fixed, 20) == _uint32Max || _uint32(fixed, 24) == _uint32Max,
+          readUint32Le(fixed, 20) == _uint32Max ||
+          readUint32Le(fixed, 24) == _uint32Max,
     );
   }
 
@@ -692,22 +667,22 @@ final class ZipAssetHandler
     final fixed = await source.read(
       ByteRange(entry.localOffset, entry.localOffset + 30),
     );
-    if (_uint32(fixed, 0) != _localSignature) {
+    if (readUint32Le(fixed, 0) != _localSignature) {
       throw const MalformedAssetFormatException(
         'A ZIP local header signature is invalid.',
       );
     }
-    final flags = _uint16(fixed, 6);
+    final flags = readUint16Le(fixed, 6);
     _validateFlags(flags);
-    final compression = _uint16(fixed, 8);
+    final compression = readUint16Le(fixed, 8);
     _validateCompression(compression);
     if (flags != entry.flags || compression != entry.compressionMethod) {
       throw const MalformedAssetFormatException(
         'ZIP local and central header metadata disagree.',
       );
     }
-    final nameLength = _uint16(fixed, 26);
-    final extraLength = _uint16(fixed, 28);
+    final nameLength = readUint16Le(fixed, 26);
+    final extraLength = readUint16Le(fixed, 28);
     final variableEnd = entry.localOffset + 30 + nameLength + extraLength;
     if (variableEnd > centralDirectoryOffset) {
       throw const MalformedAssetFormatException(
@@ -741,9 +716,9 @@ final class ZipAssetHandler
         centralDirectoryOffset,
       );
     } else {
-      final localCrc = _uint32(fixed, 14);
-      var localCompressed = _uint32(fixed, 18);
-      var localUncompressed = _uint32(fixed, 22);
+      final localCrc = readUint32Le(fixed, 14);
+      var localCompressed = readUint32Le(fixed, 18);
+      var localUncompressed = readUint32Le(fixed, 22);
       if (localCompressed == _uint32Max || localUncompressed == _uint32Max) {
         final zip64 = _readZip64Extra(
           localExtra,
@@ -790,7 +765,7 @@ final class ZipAssetHandler
       );
     }
     final first = await source.read(ByteRange(offset, offset + 4));
-    final marker = _uint32(first, 0);
+    final marker = readUint32Le(first, 0);
     if ((marker == _localSignature || marker == _centralSignature) &&
         entry.compressedSize == 0 &&
         entry.uncompressedSize == 0) {
@@ -806,15 +781,15 @@ final class ZipAssetHandler
     }
     final descriptor = await source.read(ByteRange(offset, offset + length));
     var cursor = hasSignature ? 4 : 0;
-    final crc = _uint32(descriptor, cursor);
+    final crc = readUint32Le(descriptor, cursor);
     cursor += 4;
     final compressed = sizeFieldLength == 8
         ? _uint64(descriptor, cursor)
-        : _uint32(descriptor, cursor);
+        : readUint32Le(descriptor, cursor);
     cursor += sizeFieldLength;
     final uncompressed = sizeFieldLength == 8
         ? _uint64(descriptor, cursor)
-        : _uint32(descriptor, cursor);
+        : readUint32Le(descriptor, cursor);
     if (crc != entry.crc32 ||
         compressed != entry.compressedSize ||
         uncompressed != entry.uncompressedSize) {
@@ -1054,8 +1029,8 @@ final class ZipAssetHandler
           'A ZIP extra field is truncated.',
         );
       }
-      final id = _uint16(extra, offset);
-      final length = _uint16(extra, offset + 2);
+      final id = readUint16Le(extra, offset);
+      final length = readUint16Le(extra, offset + 2);
       offset += 4;
       if (length > extra.length - offset) {
         throw const MalformedAssetFormatException(
@@ -1081,7 +1056,7 @@ final class ZipAssetHandler
               'The ZIP64 extra field is truncated.',
             );
           }
-          final value = _uint32(extra, cursor);
+          final value = readUint32Le(extra, cursor);
           cursor += 4;
           return value;
         }
@@ -1108,7 +1083,7 @@ final class ZipAssetHandler
           'A ZIP extra field is truncated.',
         );
       }
-      final length = _uint16(extra, offset + 2);
+      final length = readUint16Le(extra, offset + 2);
       offset += 4;
       if (length > extra.length - offset) {
         throw const MalformedAssetFormatException(
@@ -1139,23 +1114,11 @@ final class ZipAssetHandler
     };
   }
 
-  static int _uint16(Uint8List bytes, int offset) =>
-      ByteData.sublistView(bytes).getUint16(offset, Endian.little);
-
-  static int _uint32(Uint8List bytes, int offset) =>
-      ByteData.sublistView(bytes).getUint32(offset, Endian.little);
-
-  static int _uint64(Uint8List bytes, int offset) {
-    final data = ByteData.sublistView(bytes);
-    final low = data.getUint32(offset, Endian.little);
-    final high = data.getUint32(offset + 4, Endian.little);
-    if (high > 0x1fffff) {
-      throw const MalformedAssetFormatException(
+  static int _uint64(Uint8List bytes, int offset) =>
+      tryReadUint64Le(bytes, offset) ??
+      (throw const MalformedAssetFormatException(
         'A ZIP64 value exceeds the supported address range.',
-      );
-    }
-    return high * 0x100000000 + low;
-  }
+      ));
 
   static Uint8List _little16(int value) {
     final bytes = Uint8List(2);
@@ -1197,8 +1160,6 @@ final class ZipAssetHandler
     return (crc ^ 0xffffffff) & _uint32Max;
   }
 }
-
-enum _ZipMutation { embed, replace, remove }
 
 final class _ZipEntry {
   _ZipEntry({

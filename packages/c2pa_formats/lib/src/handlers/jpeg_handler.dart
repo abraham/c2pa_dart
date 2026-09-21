@@ -7,8 +7,10 @@ import 'package:c2pa_io/c2pa_io.dart';
 import '../asset_format.dart';
 import '../asset_handler.dart';
 import '../byte_compare.dart';
+import '../byte_reader.dart';
 import '../errors.dart';
 import '../hash_layout.dart';
+import '../manifest_mutation.dart';
 import '../xmp.dart';
 import '../xmp_remote_reference.dart';
 
@@ -17,6 +19,7 @@ import '../xmp_remote_reference.dart';
 /// The manifest is stored across one or more APP11 segments with the `JP`
 /// common identifier and `c2pa` JPEG XT marker.
 final class JpegAssetHandler
+    with ManifestRewrite
     implements
         AssetHandler,
         DataHashLayoutProvider,
@@ -507,39 +510,10 @@ final class JpegAssetHandler
   }
 
   @override
-  Future<void> embedManifest(
-    RandomAccessByteSource source,
-    Uint8List manifest,
-    WritableByteSink output,
-  ) => _rewrite(
-    source,
-    output,
-    manifest: manifest,
-    operation: _JpegMutation.embed,
-  );
-
-  @override
-  Future<void> replaceManifest(
-    RandomAccessByteSource source,
-    Uint8List manifest,
-    WritableByteSink output,
-  ) => _rewrite(
-    source,
-    output,
-    manifest: manifest,
-    operation: _JpegMutation.replace,
-  );
-
-  @override
-  Future<void> removeManifest(
-    RandomAccessByteSource source,
-    WritableByteSink output,
-  ) => _rewrite(source, output, operation: _JpegMutation.remove);
-
-  Future<void> _rewrite(
+  Future<void> rewriteManifest(
     RandomAccessByteSource source,
     WritableByteSink output, {
-    required _JpegMutation operation,
+    required ManifestMutation operation,
     Uint8List? manifest,
   }) async {
     if (await output.length != 0) {
@@ -571,10 +545,10 @@ final class JpegAssetHandler
       );
     }
     final hasManifest = starts.isNotEmpty;
-    if (operation == _JpegMutation.embed && hasManifest) {
+    if (operation == ManifestMutation.embed && hasManifest) {
       throw const ManifestAlreadyExistsException(AssetFormat.jpeg);
     }
-    if (operation != _JpegMutation.embed && !hasManifest) {
+    if (operation != ManifestMutation.embed && !hasManifest) {
       throw const ManifestNotFoundException(AssetFormat.jpeg);
     }
 
@@ -781,8 +755,8 @@ final class JpegAssetHandler
               markerEnd: segmentEnd,
               payloadOffset: payloadOffset,
               payloadLength: payloadLength,
-              entity: _uint16(payloadPrefix, 2),
-              sequence: _uint32(payloadPrefix, 4),
+              entity: readUint16Be(payloadPrefix, 2),
+              sequence: readUint32Be(payloadPrefix, 4),
               prefix: payloadPrefix,
             ),
           );
@@ -945,7 +919,7 @@ final class JpegAssetHandler
         );
       }
       final lengthBytes = await source.read(ByteRange(offset, offset + 2));
-      final segmentLength = _uint16(lengthBytes, 0);
+      final segmentLength = readUint16Be(lengthBytes, 0);
       if (segmentLength < 2) {
         throw MalformedAssetFormatException(
           'JPEG segment at offset $markerStart has invalid length '
@@ -974,8 +948,8 @@ final class JpegAssetHandler
               markerEnd: segmentEnd,
               payloadOffset: payloadOffset,
               payloadLength: payloadLength,
-              entity: _uint16(payloadPrefix, 2),
-              sequence: _uint32(payloadPrefix, 4),
+              entity: readUint16Be(payloadPrefix, 2),
+              sequence: readUint32Be(payloadPrefix, 4),
               prefix: payloadPrefix,
             ),
           );
@@ -1001,7 +975,7 @@ final class JpegAssetHandler
   static bool _hasC2paStartData(_JpegXtPacket packet) {
     final prefix = packet.prefix;
     if (prefix.length < 33) return false;
-    final boxHeaderSize = _uint32(prefix, 8) == 1 ? 16 : 8;
+    final boxHeaderSize = readUint32Be(prefix, 8) == 1 ? 16 : 8;
     final descriptionOffset = _jpegXtPrefixLength + boxHeaderSize;
     if (prefix.length < descriptionOffset + 12) return false;
     return _equalRange(
@@ -1019,7 +993,7 @@ final class JpegAssetHandler
         'The first C2PA APP11 segment has no complete ISO box header.',
       );
     }
-    final size32 = _uint32(payload, _jpegXtPrefixLength);
+    final size32 = readUint32Be(payload, _jpegXtPrefixLength);
     if (size32 == 0) {
       throw const MalformedAssetFormatException(
         'A segmented C2PA box must declare its total size.',
@@ -1107,24 +1081,14 @@ final class JpegAssetHandler
     return true;
   }
 
-  static int _uint16(List<int> bytes, int offset) =>
-      (bytes[offset] << 8) | bytes[offset + 1];
-
-  static int _uint32(List<int> bytes, int offset) =>
-      (bytes[offset] << 24) |
-      (bytes[offset + 1] << 16) |
-      (bytes[offset + 2] << 8) |
-      bytes[offset + 3];
-
   static int _uint64(List<int> bytes, int offset) {
-    var value = 0;
-    for (var index = 0; index < 8; index++) {
-      value = (value << 8) | bytes[offset + index];
-    }
-    if (value < 0 || value > ByteRange.maxCoordinate) {
-      throw AssetLimitExceededException(
+    final value = tryReadUint64Be(bytes, offset);
+    if (value == null) {
+      // The declared size is too large to represent exactly, so the true
+      // value is unavailable; report the first rejected size instead.
+      throw const AssetLimitExceededException(
         limit: ByteRange.maxCoordinate,
-        actual: value,
+        actual: ByteRange.maxCoordinate + 1,
       );
     }
     return value;
@@ -1133,8 +1097,6 @@ final class JpegAssetHandler
 
 /// Backward-compatible alias for [JpegAssetHandler].
 typedef JpegHandler = JpegAssetHandler;
-
-enum _JpegMutation { embed, replace, remove }
 
 final class _JpegXtPacket {
   const _JpegXtPacket({

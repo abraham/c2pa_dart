@@ -406,6 +406,18 @@ final class _CborDecoder {
   List<Object?> _readArray(int length, int depth) =>
       List<Object?>.generate(length, (_) => read(depth + 1), growable: false);
 
+  /// Returns a comparable identity for a decoded map [key].
+  ///
+  /// Keys are re-encoded canonically so that two encodings that differ only in
+  /// integer width or map ordering collide, which is what lets the decoder
+  /// reject duplicates the raw bytes would hide. The result is base64 only
+  /// because [Set] needs a value with structural equality.
+  String _canonicalKey(Object? key) {
+    final output = BytesBuilder(copy: false);
+    _CborEncoder(output, maxDepth).write(key, 0);
+    return base64.encode(output.takeBytes());
+  }
+
   Map<Object?, Object?> _readMap(int length, int depth) {
     final result = <Object?, Object?>{};
     final canonicalKeys = <String>{};
@@ -414,10 +426,7 @@ final class _CborDecoder {
       final keyStart = offset;
       final key = read(depth + 1);
       final encodedKey = Uint8List.fromList(input.sublist(keyStart, offset));
-      final canonicalKeyOutput = BytesBuilder(copy: false);
-      _CborEncoder(canonicalKeyOutput, maxDepth).write(key, 0);
-      final canonicalKey = canonicalKeyOutput.takeBytes();
-      if (!canonicalKeys.add(base64.encode(canonicalKey))) {
+      if (!canonicalKeys.add(_canonicalKey(key))) {
         _failAt(
           CborDecodingErrorCode.duplicateMapKey,
           'Map contains duplicate canonical keys',
@@ -500,10 +509,7 @@ final class _CborDecoder {
           keyStart,
         );
       }
-      final canonicalKeyOutput = BytesBuilder(copy: false);
-      _CborEncoder(canonicalKeyOutput, maxDepth).write(key, 0);
-      if (!canonicalKeys.add(base64.encode(canonicalKeyOutput.takeBytes())) ||
-          result.containsKey(key)) {
+      if (!canonicalKeys.add(_canonicalKey(key)) || result.containsKey(key)) {
         _failAt(
           CborDecodingErrorCode.duplicateMapKey,
           'Map contains duplicate keys',

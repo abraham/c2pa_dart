@@ -5,9 +5,11 @@ import 'package:c2pa_io/c2pa_io.dart';
 
 import '../asset_format.dart';
 import '../asset_handler.dart';
+import '../byte_reader.dart';
 import '../errors.dart';
 import '../hash_layout.dart';
 import '../isobmff.dart';
+import '../manifest_mutation.dart';
 import '../xmp.dart';
 import '../xmp_remote_reference.dart';
 
@@ -16,6 +18,7 @@ import '../xmp_remote_reference.dart';
 /// The manifest is a top-level `jumb` box in the JPEG XL container. Raw JPEG
 /// XL codestreams are detected as unsupported because they cannot carry boxes.
 final class JpegXlAssetHandler
+    with ManifestRewrite
     implements
         AssetHandler,
         BoxHashLayoutProvider,
@@ -165,36 +168,6 @@ final class JpegXlAssetHandler
   }
 
   @override
-  Future<void> embedManifest(
-    RandomAccessByteSource source,
-    Uint8List manifest,
-    WritableByteSink output,
-  ) => _rewrite(
-    source,
-    output,
-    operation: _JpegXlMutation.embed,
-    manifest: manifest,
-  );
-
-  @override
-  Future<void> replaceManifest(
-    RandomAccessByteSource source,
-    Uint8List manifest,
-    WritableByteSink output,
-  ) => _rewrite(
-    source,
-    output,
-    operation: _JpegXlMutation.replace,
-    manifest: manifest,
-  );
-
-  @override
-  Future<void> removeManifest(
-    RandomAccessByteSource source,
-    WritableByteSink output,
-  ) => _rewrite(source, output, operation: _JpegXlMutation.remove);
-
-  @override
   Future<String?> readXmp(RandomAccessByteSource source) async {
     final inspection = await _inspect(source);
     final xmp = inspection.xmp;
@@ -336,10 +309,11 @@ final class JpegXlAssetHandler
     await output.append(staged.toBytes());
   }
 
-  Future<void> _rewrite(
+  @override
+  Future<void> rewriteManifest(
     RandomAccessByteSource source,
     WritableByteSink output, {
-    required _JpegXlMutation operation,
+    required ManifestMutation operation,
     Uint8List? manifest,
   }) async {
     if (await output.length != 0) {
@@ -359,10 +333,10 @@ final class JpegXlAssetHandler
 
     final inspection = await _inspect(source);
     final existing = inspection.manifest;
-    if (operation == _JpegXlMutation.embed && existing != null) {
+    if (operation == ManifestMutation.embed && existing != null) {
       throw const ManifestAlreadyExistsException(AssetFormat.jpegXl);
     }
-    if (operation != _JpegXlMutation.embed && existing == null) {
+    if (operation != ManifestMutation.embed && existing == null) {
       throw const ManifestNotFoundException(AssetFormat.jpegXl);
     }
 
@@ -535,7 +509,7 @@ final class JpegXlAssetHandler
         );
       }
       final basic = await source.read(ByteRange(offset, offset + 8));
-      final size32 = _uint32(basic, 0);
+      final size32 = readUint32Be(basic, 0);
       final type = String.fromCharCodes(basic.sublist(4, 8));
       var headerSize = 8;
       var extended = false;
@@ -626,7 +600,7 @@ final class JpegXlAssetHandler
       ByteRange(box.payloadOffset, box.payloadOffset + 30),
     );
     if (String.fromCharCodes(peek.sublist(4, 8)) != 'jumd') return false;
-    final innerSize = _uint32(peek, 0);
+    final innerSize = readUint32Be(peek, 0);
     if (innerSize < 30 || innerSize > box.payloadLength) {
       throw const MalformedAssetFormatException(
         'The JPEG XL JUMBF description box has invalid bounds.',
@@ -648,7 +622,7 @@ final class JpegXlAssetHandler
         'A JPEG XL manifest must be a complete C2PA jumb box.',
       );
     }
-    final size32 = _uint32(manifest, 0);
+    final size32 = readUint32Be(manifest, 0);
     if (String.fromCharCodes(manifest.sublist(4, 8)) != 'jumb') {
       throw const MalformedAssetFormatException(
         'A JPEG XL manifest must use a top-level jumb box.',
@@ -676,8 +650,8 @@ final class JpegXlAssetHandler
     }
     final payload = Uint8List.sublistView(manifest, headerSize);
     if (String.fromCharCodes(payload.sublist(4, 8)) != 'jumd' ||
-        _uint32(payload, 0) < 30 ||
-        _uint32(payload, 0) > payload.length ||
+        readUint32Be(payload, 0) < 30 ||
+        readUint32Be(payload, 0) > payload.length ||
         payload[24] & 0x03 != 0x03) {
       throw const MalformedAssetFormatException(
         'The JPEG XL manifest lacks a valid JUMBF description.',
@@ -708,20 +682,11 @@ final class JpegXlAssetHandler
     }
   }
 
-  static int _uint32(Uint8List bytes, int offset) =>
-      ByteData.sublistView(bytes).getUint32(offset, Endian.big);
-
-  static int _uint64(Uint8List bytes) {
-    final data = ByteData.sublistView(bytes);
-    final high = data.getUint32(0, Endian.big);
-    final low = data.getUint32(4, Endian.big);
-    if (high > 0x1fffff) {
-      throw const MalformedAssetFormatException(
+  static int _uint64(Uint8List bytes) =>
+      tryReadUint64Be(bytes, 0) ??
+      (throw const MalformedAssetFormatException(
         'A JPEG XL 64-bit box size exceeds the supported address range.',
-      );
-    }
-    return high * 0x100000000 + low;
-  }
+      ));
 
   static bool _equal(List<int> left, List<int> right) {
     if (left.length != right.length) return false;
@@ -731,8 +696,6 @@ final class JpegXlAssetHandler
     return true;
   }
 }
-
-enum _JpegXlMutation { embed, replace, remove }
 
 final class _JpegXlInspection {
   const _JpegXlInspection({

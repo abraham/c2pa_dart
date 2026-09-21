@@ -7,6 +7,7 @@ import '../asset_format.dart';
 import '../asset_handler.dart';
 import '../errors.dart';
 import '../hash_layout.dart';
+import '../manifest_mutation.dart';
 import '../xmp.dart';
 import '../xmp_remote_reference.dart';
 
@@ -15,6 +16,7 @@ import '../xmp_remote_reference.dart';
 /// The manifest is stored in TIFF tag `0xCD41` as offset data. XMP is stored in
 /// tag `0x02BC`; BigTIFF is rejected by this handler.
 final class TiffAssetHandler
+    with ManifestRewrite
     implements
         AssetHandler,
         DataHashLayoutProvider,
@@ -162,36 +164,6 @@ final class TiffAssetHandler
       HashLayoutKind.boxHash,
     );
   }
-
-  @override
-  Future<void> embedManifest(
-    RandomAccessByteSource source,
-    Uint8List manifest,
-    WritableByteSink output,
-  ) => _rewrite(
-    source,
-    output,
-    manifest: manifest,
-    operation: _TiffMutation.embed,
-  );
-
-  @override
-  Future<void> replaceManifest(
-    RandomAccessByteSource source,
-    Uint8List manifest,
-    WritableByteSink output,
-  ) => _rewrite(
-    source,
-    output,
-    manifest: manifest,
-    operation: _TiffMutation.replace,
-  );
-
-  @override
-  Future<void> removeManifest(
-    RandomAccessByteSource source,
-    WritableByteSink output,
-  ) => _rewrite(source, output, operation: _TiffMutation.remove);
 
   @override
   Future<String?> readXmp(RandomAccessByteSource source) async {
@@ -365,10 +337,11 @@ final class TiffAssetHandler
     await output.append(staged.toBytes());
   }
 
-  Future<void> _rewrite(
+  @override
+  Future<void> rewriteManifest(
     RandomAccessByteSource source,
     WritableByteSink output, {
-    required _TiffMutation operation,
+    required ManifestMutation operation,
     Uint8List? manifest,
   }) async {
     if (await output.length != 0) {
@@ -385,10 +358,10 @@ final class TiffAssetHandler
 
     final structure = await _inspect(source);
     final existing = structure.manifestEntry;
-    if (operation == _TiffMutation.embed && existing != null) {
+    if (operation == ManifestMutation.embed && existing != null) {
       throw const ManifestAlreadyExistsException(AssetFormat.tiff);
     }
-    if (operation != _TiffMutation.embed && existing == null) {
+    if (operation != ManifestMutation.embed && existing == null) {
       throw const ManifestNotFoundException(AssetFormat.tiff);
     }
 
@@ -396,7 +369,7 @@ final class TiffAssetHandler
     late _Ifd target;
     late int pointerLocation;
     var removeStandaloneIfd = false;
-    if (operation == _TiffMutation.embed) {
+    if (operation == ManifestMutation.embed) {
       if (pages.length == 1) {
         target = pages.first;
         pointerLocation = 4;
@@ -416,7 +389,7 @@ final class TiffAssetHandler
           ? 4
           : pages[targetIndex - 1].nextPointerOffset;
       removeStandaloneIfd =
-          operation == _TiffMutation.remove &&
+          operation == ManifestMutation.remove &&
           target.entries.length == 1 &&
           targetIndex > 0;
     }
@@ -906,5 +879,3 @@ final class _TiffXmp {
   final _IfdEntry entry;
   final Uint8List bytes;
 }
-
-enum _TiffMutation { embed, replace, remove }

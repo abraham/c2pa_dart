@@ -6,8 +6,10 @@ import 'package:c2pa_io/c2pa_io.dart';
 import '../asset_format.dart';
 import '../asset_handler.dart';
 import '../byte_compare.dart';
+import '../byte_reader.dart';
 import '../errors.dart';
 import '../hash_layout.dart';
+import '../manifest_mutation.dart';
 import '../xmp.dart';
 import '../xmp_remote_reference.dart';
 
@@ -16,6 +18,7 @@ import '../xmp_remote_reference.dart';
 /// The manifest is stored in a `caBX` ancillary chunk. XMP metadata is read
 /// from `iTXt` chunks whose keyword is `XML:com.adobe.xmp`.
 final class PngAssetHandler
+    with ManifestRewrite
     implements
         AssetHandler,
         DataHashLayoutProvider,
@@ -346,39 +349,10 @@ final class PngAssetHandler
   }
 
   @override
-  Future<void> embedManifest(
-    RandomAccessByteSource source,
-    Uint8List manifest,
-    WritableByteSink output,
-  ) => _rewrite(
-    source,
-    output,
-    manifest: manifest,
-    operation: _PngMutation.embed,
-  );
-
-  @override
-  Future<void> replaceManifest(
-    RandomAccessByteSource source,
-    Uint8List manifest,
-    WritableByteSink output,
-  ) => _rewrite(
-    source,
-    output,
-    manifest: manifest,
-    operation: _PngMutation.replace,
-  );
-
-  @override
-  Future<void> removeManifest(
-    RandomAccessByteSource source,
-    WritableByteSink output,
-  ) => _rewrite(source, output, operation: _PngMutation.remove);
-
-  Future<void> _rewrite(
+  Future<void> rewriteManifest(
     RandomAccessByteSource source,
     WritableByteSink output, {
-    required _PngMutation operation,
+    required ManifestMutation operation,
     Uint8List? manifest,
   }) async {
     if (await output.length != 0) {
@@ -403,10 +377,10 @@ final class PngAssetHandler
 
     final inspection = await _inspect(source);
     final existing = inspection.manifestChunk;
-    if (operation == _PngMutation.embed && existing != null) {
+    if (operation == ManifestMutation.embed && existing != null) {
       throw const ManifestAlreadyExistsException(AssetFormat.png);
     }
-    if (operation != _PngMutation.embed && existing == null) {
+    if (operation != ManifestMutation.embed && existing == null) {
       throw const ManifestNotFoundException(AssetFormat.png);
     }
 
@@ -491,7 +465,7 @@ final class PngAssetHandler
       }
 
       final header = await source.read(ByteRange(offset, offset + 8));
-      final dataLength = _uint32(header, 0);
+      final dataLength = readUint32Be(header, 0);
       final type = Uint8List.fromList(header.sublist(4, 8));
       if (!_isValidChunkType(type)) {
         throw MalformedAssetFormatException(
@@ -561,7 +535,7 @@ final class PngAssetHandler
       }
       final calculatedCrc = crc ^ 0xffffffff;
       final storedCrcBytes = await source.read(ByteRange(crcOffset, chunkEnd));
-      final storedCrc = _uint32(storedCrcBytes, 0);
+      final storedCrc = readUint32Be(storedCrcBytes, 0);
       if (calculatedCrc != storedCrc) {
         throw InvalidChunkCrcException(
           chunkType: typeName,
@@ -624,12 +598,6 @@ final class PngAssetHandler
             (byte >= 0x41 && byte <= 0x5a) || (byte >= 0x61 && byte <= 0x7a),
       );
 
-  static int _uint32(List<int> bytes, int offset) =>
-      (bytes[offset] << 24) |
-      (bytes[offset + 1] << 16) |
-      (bytes[offset + 2] << 8) |
-      bytes[offset + 3];
-
   static int _updateCrc(int crc, List<int> bytes) {
     var value = crc;
     for (final byte in bytes) {
@@ -644,8 +612,6 @@ final class PngAssetHandler
 
 /// Backward-compatible alias for [PngAssetHandler].
 typedef PngHandler = PngAssetHandler;
-
-enum _PngMutation { embed, replace, remove }
 
 final class _PngChunk {
   const _PngChunk({

@@ -6,8 +6,10 @@ import 'package:c2pa_io/c2pa_io.dart';
 import '../asset_format.dart';
 import '../asset_handler.dart';
 import '../byte_compare.dart';
+import '../byte_reader.dart';
 import '../errors.dart';
 import '../hash_layout.dart';
+import '../manifest_mutation.dart';
 import '../xmp.dart';
 import '../xmp_remote_reference.dart';
 
@@ -16,6 +18,7 @@ import '../xmp_remote_reference.dart';
 /// Handles WebP, WAV, and AVI assets. The manifest is stored in a RIFF `C2PA`
 /// chunk, and XMP metadata is stored in an `XMP ` chunk.
 final class RiffAssetHandler
+    with ManifestRewrite
     implements
         AssetHandler,
         DataHashLayoutProvider,
@@ -187,36 +190,6 @@ final class RiffAssetHandler
   Future<BoxHashLayout> getBoxHashLayout(RandomAccessByteSource source) async {
     throw UnsupportedHashLayoutException(format, HashLayoutKind.boxHash);
   }
-
-  @override
-  Future<void> embedManifest(
-    RandomAccessByteSource source,
-    Uint8List manifest,
-    WritableByteSink output,
-  ) => _rewrite(
-    source,
-    output,
-    manifest: manifest,
-    operation: _RiffMutation.embed,
-  );
-
-  @override
-  Future<void> replaceManifest(
-    RandomAccessByteSource source,
-    Uint8List manifest,
-    WritableByteSink output,
-  ) => _rewrite(
-    source,
-    output,
-    manifest: manifest,
-    operation: _RiffMutation.replace,
-  );
-
-  @override
-  Future<void> removeManifest(
-    RandomAccessByteSource source,
-    WritableByteSink output,
-  ) => _rewrite(source, output, operation: _RiffMutation.remove);
 
   @override
   Future<String?> readXmp(RandomAccessByteSource source) async {
@@ -458,10 +431,11 @@ final class RiffAssetHandler
     _ => throw StateError('Unsupported RIFF format'),
   };
 
-  Future<void> _rewrite(
+  @override
+  Future<void> rewriteManifest(
     RandomAccessByteSource source,
     WritableByteSink output, {
-    required _RiffMutation operation,
+    required ManifestMutation operation,
     Uint8List? manifest,
   }) async {
     if (await output.length != 0) {
@@ -486,10 +460,10 @@ final class RiffAssetHandler
 
     final inspection = await _inspect(source);
     final existing = inspection.manifestChunk;
-    if (operation == _RiffMutation.embed && existing != null) {
+    if (operation == ManifestMutation.embed && existing != null) {
       throw ManifestAlreadyExistsException(format);
     }
-    if (operation != _RiffMutation.embed && existing == null) {
+    if (operation != ManifestMutation.embed && existing == null) {
       throw ManifestNotFoundException(format);
     }
 
@@ -608,7 +582,7 @@ final class RiffAssetHandler
     if (!bytesEqualAt(header, 0, _riff)) {
       throw MalformedAssetFormatException('Expected RIFF at offset $offset.');
     }
-    final declaredSize = _uint32Little(header, 4);
+    final declaredSize = readUint32Le(header, 4);
     if (declaredSize < 4) {
       throw const MalformedAssetFormatException(
         'A RIFF chunk must include a four-byte form type.',
@@ -655,7 +629,7 @@ final class RiffAssetHandler
       final chunkHeader = await source.read(
         ByteRange(chunkOffset, chunkOffset + 8),
       );
-      final dataLength = _uint32Little(chunkHeader, 4);
+      final dataLength = readUint32Le(chunkHeader, 4);
       final paddedLength = dataLength + (dataLength & 1);
       final chunkEnd = chunkOffset + 8 + paddedLength;
       if (chunkEnd > end) {
@@ -763,12 +737,6 @@ final class RiffAssetHandler
     );
   }
 
-  static int _uint32Little(List<int> bytes, int offset) =>
-      bytes[offset] |
-      (bytes[offset + 1] << 8) |
-      (bytes[offset + 2] << 16) |
-      (bytes[offset + 3] << 24);
-
   Uint8List _normalizeXmpPayload(Uint8List bytes) {
     try {
       return Uint8List.fromList(utf8.encode(utf8.decode(bytes).trimRight()));
@@ -779,8 +747,6 @@ final class RiffAssetHandler
     }
   }
 }
-
-enum _RiffMutation { embed, replace, remove }
 
 final class _RiffChunk {
   const _RiffChunk({

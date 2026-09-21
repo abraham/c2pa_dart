@@ -7,6 +7,7 @@ import '../asset_format.dart';
 import '../asset_handler.dart';
 import '../errors.dart';
 import '../hash_layout.dart';
+import '../manifest_mutation.dart';
 import '../xmp.dart';
 import '../xmp_remote_reference.dart';
 
@@ -15,6 +16,7 @@ import '../xmp_remote_reference.dart';
 /// The manifest is base64 text in a `c2pa:manifest` element that must be a
 /// direct child of SVG `metadata`.
 final class SvgAssetHandler
+    with ManifestRewrite
     implements
         AssetHandler,
         DataHashLayoutProvider,
@@ -137,36 +139,6 @@ final class SvgAssetHandler
     }
     return decoded;
   }
-
-  @override
-  Future<void> embedManifest(
-    RandomAccessByteSource source,
-    Uint8List manifest,
-    WritableByteSink output,
-  ) => _mutateManifest(
-    source,
-    output,
-    operation: _SvgMutation.embed,
-    manifest: manifest,
-  );
-
-  @override
-  Future<void> replaceManifest(
-    RandomAccessByteSource source,
-    Uint8List manifest,
-    WritableByteSink output,
-  ) => _mutateManifest(
-    source,
-    output,
-    operation: _SvgMutation.replace,
-    manifest: manifest,
-  );
-
-  @override
-  Future<void> removeManifest(
-    RandomAccessByteSource source,
-    WritableByteSink output,
-  ) => _mutateManifest(source, output, operation: _SvgMutation.remove);
 
   @override
   Future<DataHashLayout> getDataHashLayout(
@@ -316,10 +288,11 @@ final class SvgAssetHandler
     ], output);
   }
 
-  Future<void> _mutateManifest(
+  @override
+  Future<void> rewriteManifest(
     RandomAccessByteSource source,
     WritableByteSink output, {
-    required _SvgMutation operation,
+    required ManifestMutation operation,
     Uint8List? manifest,
   }) async {
     await _requireEmptySink(output);
@@ -331,17 +304,17 @@ final class SvgAssetHandler
     }
     final inspection = await _inspect(source);
     final existing = inspection.manifest;
-    if (operation == _SvgMutation.embed && existing != null) {
+    if (operation == ManifestMutation.embed && existing != null) {
       throw const ManifestAlreadyExistsException(AssetFormat.svg);
     }
-    if (operation != _SvgMutation.embed && existing == null) {
+    if (operation != ManifestMutation.embed && existing == null) {
       throw const ManifestNotFoundException(AssetFormat.svg);
     }
 
     final patches = <_SvgPatch>[];
-    if (operation == _SvgMutation.remove) {
+    if (operation == ManifestMutation.remove) {
       patches.add(_SvgPatch(existing!.start, existing.end, ''));
-    } else if (operation == _SvgMutation.replace) {
+    } else if (operation == ManifestMutation.replace) {
       final encoded = base64.encode(manifest!);
       if (existing!.contentStart == existing.contentEnd &&
           inspection.bytes[existing.contentStart] == 0x2f) {
@@ -533,8 +506,6 @@ final class SvgAssetHandler
 
 /// Backward-compatible alias for [SvgAssetHandler].
 typedef SvgHandler = SvgAssetHandler;
-
-enum _SvgMutation { embed, replace, remove }
 
 enum _XmlTokenKind { start, end, text, comment, cdata, processingInstruction }
 

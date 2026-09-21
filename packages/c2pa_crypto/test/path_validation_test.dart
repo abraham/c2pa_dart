@@ -778,6 +778,78 @@ void main() {
       contains(CertificatePathIssueCode.loopDetected),
     );
   });
+
+  test('accepts an RSA signer at the minimum modulus size', () async {
+    final der = await _certificate(
+      subject: 'Leaf',
+      issuer: 'Root A',
+      subjectKey: leafKey,
+      issuerKey: rootAKey,
+      serial: 90,
+    );
+    final issues = validateC2paSignerCertificate(
+      X509Certificate.parse(der),
+      algorithm: SigningAlgorithm.ps256,
+      atTime: DateTime.utc(2027),
+    );
+
+    expect(issues, isEmpty);
+  });
+
+  test('rejects an RSA signer below the minimum modulus size', () async {
+    final weakKey = await _generateKey(9, modulusBits: 1024);
+    final der = await _certificate(
+      subject: 'Weak Leaf',
+      issuer: 'Root A',
+      subjectKey: weakKey,
+      issuerKey: rootAKey,
+      serial: 91,
+    );
+    final issues = validateC2paSignerCertificate(
+      X509Certificate.parse(der),
+      algorithm: SigningAlgorithm.ps256,
+      atTime: DateTime.utc(2027),
+    );
+
+    expect(
+      issues.map((issue) => issue.code),
+      contains(CertificateProfileIssueCode.rsaModulusTooSmall),
+    );
+    expect(
+      issues
+          .singleWhere(
+            (issue) =>
+                issue.code == CertificateProfileIssueCode.rsaModulusTooSmall,
+          )
+          .message,
+      contains('1024 bits'),
+    );
+  });
+
+  test('ignores the RSA modulus floor for an ECDSA signer', () async {
+    final ecPair = await webcrypto.EcdsaPrivateKey.generateKey(
+      webcrypto.EllipticCurve.p256,
+    );
+    final der = await _customCertificate(
+      subject: 'EC Leaf',
+      issuer: 'Root A',
+      subjectSpki: await ecPair.publicKey.exportSpkiKey(),
+      subjectIdentifier: const [9, 9, 9],
+      serial: 92,
+      signatureAlgorithm: _sequence([_oid('1.2.840.113549.1.1.11'), _null()]),
+      sign: (tbs) => rootAKey.privateKey.signBytes(tbs),
+    );
+    final issues = validateC2paSignerCertificate(
+      X509Certificate.parse(der),
+      algorithm: SigningAlgorithm.es256,
+      atTime: DateTime.utc(2027),
+    );
+
+    expect(
+      issues.map((issue) => issue.code),
+      isNot(contains(CertificateProfileIssueCode.rsaModulusTooSmall)),
+    );
+  });
 }
 
 Future<CertificatePathValidationResult> _validate(_Chain chain) =>
@@ -850,9 +922,9 @@ final class _Key {
   final Uint8List identifier;
 }
 
-Future<_Key> _generateKey(int identifier) async {
+Future<_Key> _generateKey(int identifier, {int modulusBits = 2048}) async {
   final pair = await webcrypto.RsassaPkcs1V15PrivateKey.generateKey(
-    2048,
+    modulusBits,
     BigInt.from(65537),
     webcrypto.Hash.sha256,
   );

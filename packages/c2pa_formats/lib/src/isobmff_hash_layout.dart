@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:c2pa_io/c2pa_io.dart';
 
+import 'byte_reader.dart';
 import 'errors.dart';
 import 'handlers/isobmff_handler.dart';
 import 'isobmff.dart';
@@ -556,7 +557,7 @@ final class IsoBmffHashLayoutReader {
         );
       }
       final header = await source.read(ByteRange(offset, offset + 8));
-      final size32 = _uint32(header, 0);
+      final size32 = readUint32Be(header, 0);
       final type = String.fromCharCodes(header.sublist(4, 8));
       var headerSize = 8;
       var extended = false;
@@ -987,7 +988,7 @@ final class IsoBmffHashLayoutReader {
         'A BMFF mfhd box is missing its sequence number.',
       );
     }
-    return _uint32(
+    return readUint32Be(
       await source.read(ByteRange(sequenceOffset, sequenceOffset + 4)),
       0,
     );
@@ -1143,20 +1144,11 @@ Uint8List _uint64Bytes(int value) {
   return bytes;
 }
 
-int _uint32(Uint8List bytes, int offset) =>
-    ByteData.sublistView(bytes).getUint32(offset, Endian.big);
-
-int _uint64(Uint8List bytes) {
-  final data = ByteData.sublistView(bytes);
-  final high = data.getUint32(0, Endian.big);
-  final low = data.getUint32(4, Endian.big);
-  if (high > 0x1fffff) {
-    throw const MalformedAssetFormatException(
+int _uint64(Uint8List bytes) =>
+    tryReadUint64Be(bytes, 0) ??
+    (throw const MalformedAssetFormatException(
       'An ISO BMFF 64-bit value exceeds the supported address range.',
-    );
-  }
-  return high * 0x100000000 + low;
-}
+    ));
 
 bool _equal(List<int>? left, List<int> right) {
   if (left == null || left.length != right.length) return false;

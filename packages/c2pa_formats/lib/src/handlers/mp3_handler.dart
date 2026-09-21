@@ -5,7 +5,9 @@ import 'package:c2pa_io/c2pa_io.dart';
 
 import '../asset_format.dart';
 import '../asset_handler.dart';
+import '../byte_reader.dart';
 import '../errors.dart';
+import '../manifest_mutation.dart';
 import '../xmp.dart';
 import '../xmp_remote_reference.dart';
 
@@ -14,6 +16,7 @@ import '../xmp_remote_reference.dart';
 /// The manifest is stored in a GEOB frame with MIME type `application/c2pa`.
 /// XMP metadata is stored in a PRIV frame owned by `XMP`.
 final class Mp3AssetHandler
+    with ManifestRewrite
     implements
         AssetHandler,
         XmpMetadataProvider,
@@ -101,36 +104,6 @@ final class Mp3AssetHandler
     if (frame == null) throw const ManifestNotFoundException(AssetFormat.mp3);
     return frame.data!;
   }
-
-  @override
-  Future<void> embedManifest(
-    RandomAccessByteSource source,
-    Uint8List manifest,
-    WritableByteSink output,
-  ) => _rewrite(
-    source,
-    output,
-    manifest: manifest,
-    operation: _Id3Mutation.embed,
-  );
-
-  @override
-  Future<void> replaceManifest(
-    RandomAccessByteSource source,
-    Uint8List manifest,
-    WritableByteSink output,
-  ) => _rewrite(
-    source,
-    output,
-    manifest: manifest,
-    operation: _Id3Mutation.replace,
-  );
-
-  @override
-  Future<void> removeManifest(
-    RandomAccessByteSource source,
-    WritableByteSink output,
-  ) => _rewrite(source, output, operation: _Id3Mutation.remove);
 
   @override
   Future<String?> readXmp(RandomAccessByteSource source) async {
@@ -268,10 +241,11 @@ final class Mp3AssetHandler
     await output.append(staged.toBytes());
   }
 
-  Future<void> _rewrite(
+  @override
+  Future<void> rewriteManifest(
     RandomAccessByteSource source,
     WritableByteSink output, {
-    required _Id3Mutation operation,
+    required ManifestMutation operation,
     Uint8List? manifest,
   }) async {
     if (await output.length != 0) {
@@ -287,10 +261,10 @@ final class Mp3AssetHandler
     }
     final tag = await _inspect(source);
     final existing = tag.manifestFrame;
-    if (operation == _Id3Mutation.embed && existing != null) {
+    if (operation == ManifestMutation.embed && existing != null) {
       throw const ManifestAlreadyExistsException(AssetFormat.mp3);
     }
-    if (operation != _Id3Mutation.embed && existing == null) {
+    if (operation != ManifestMutation.embed && existing == null) {
       throw const ManifestNotFoundException(AssetFormat.mp3);
     }
 
@@ -416,7 +390,7 @@ final class Mp3AssetHandler
       final sizeBytes = await source.read(ByteRange(position, position + 4));
       final extensionSize = version == 4
           ? _decodeSyncSafe(sizeBytes, 0)
-          : _uint32(sizeBytes, 0) + 4;
+          : readUint32Be(sizeBytes, 0) + 4;
       if (extensionSize < 6 || extensionSize > tagEnd - position) {
         throw const MalformedAssetFormatException(
           'The ID3 extended header has an invalid size.',
@@ -477,7 +451,7 @@ final class Mp3AssetHandler
       }
       final frameSize = version == 4
           ? _decodeSyncSafe(frameHeader, 4)
-          : _uint32(frameHeader, 4);
+          : readUint32Be(frameHeader, 4);
       final globallyUnsynchronizedV23 = version == 3 && (flags & 0x80) != 0;
       final decodedV23Body = globallyUnsynchronizedV23
           ? await _readV23UnsynchronizedBody(
@@ -769,10 +743,6 @@ final class Mp3AssetHandler
     return data.buffer.asUint8List();
   }
 
-  static int _uint32(List<int> bytes, int offset) => ByteData.sublistView(
-    bytes is Uint8List ? bytes : Uint8List.fromList(bytes),
-  ).getUint32(offset, Endian.big);
-
   static bool _validFrameId(List<int> bytes) {
     for (var index = 0; index < 4; index++) {
       final byte = bytes[index];
@@ -807,8 +777,6 @@ final class Mp3AssetHandler
     );
   }
 }
-
-enum _Id3Mutation { embed, replace, remove }
 
 final class _Id3Frame {
   const _Id3Frame({
