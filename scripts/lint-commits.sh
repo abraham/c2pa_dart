@@ -1,15 +1,16 @@
 #!/usr/bin/env bash
 # Checks that commit messages follow Conventional Commits v1.0.0.
 #
+# The rules live in commitlint.config.mjs and are enforced by commitlint; this
+# script only works out which commits to check, which is the part that depends
+# on how CI was triggered.
+#
 # Only the commits a change actually introduces are checked, never the whole
 # history: the rules were adopted partway through the project, so rewriting
 # published history is not an option and older commits are out of scope.
 #
-# The range is resolved from the GitHub event when one is present, and from the
-# default branch otherwise, so a local run checks the same commits CI will.
-#
 # Usage:
-#   scripts/lint-commits.sh [--range <range>] [--base <ref>] [--] [dart args...]
+#   scripts/lint-commits.sh [--range <a..b>] [--base <ref>] [-- commitlint args]
 #
 # Examples:
 #   scripts/lint-commits.sh                     # this branch against its base
@@ -19,14 +20,23 @@
 # shellcheck source=scripts/lib.sh
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
-range=''
+from=''
+to='HEAD'
 base=''
 passthrough=()
 while [ $# -gt 0 ]; do
   case "$1" in
     --range)
       [ $# -ge 2 ] || die '--range requires a value'
-      range="$2"
+      case "$2" in
+        *..*)
+          from="${2%%..*}"
+          to="${2##*..}"
+          ;;
+        *) die "--range must look like <from>..<to>, got: $2" ;;
+      esac
+      [ -n "${to}" ] || to='HEAD'
+      [ -n "${from}" ] || die "--range needs a starting revision, got: $2"
       shift 2
       ;;
     --base)
@@ -35,7 +45,7 @@ while [ $# -gt 0 ]; do
       shift 2
       ;;
     -h | --help)
-      sed -n '2,18p' "${BASH_SOURCE[0]}"
+      sed -n '2,19p' "${BASH_SOURCE[0]}"
       exit 0
       ;;
     --)
@@ -51,18 +61,23 @@ while [ $# -gt 0 ]; do
 done
 
 require_command git
-require_command dart
+require_command npx
 
 cd "${REPO_ROOT}" || die 'cannot enter the repository root'
 
-[ -z "${range}" ] || [ -z "${base}" ] || die 'pass either --range or --base, not both'
+[ -z "${from}" ] || [ -z "${base}" ] || die 'pass either --range or --base, not both'
+
+# commitlint is a pinned dev dependency rather than something fetched on demand,
+# so a missing install is reported instead of being resolved from the network.
+[ -x "${REPO_ROOT}/node_modules/.bin/commitlint" ] ||
+  die 'commitlint is not installed; run: npm ci'
 
 # True when the argument names something git can resolve to a commit.
 resolves() {
   git rev-parse --verify --quiet "$1^{commit}" >/dev/null 2>&1
 }
 
-if [ -z "${range}" ]; then
+if [ -z "${from}" ]; then
   if [ -z "${base}" ]; then
     if [ -n "${GITHUB_BASE_REF:-}" ]; then
       # Pull request: everything this branch adds on top of the target branch.
@@ -104,8 +119,18 @@ Check out with fetch-depth: 0 or pass an explicit --range."
     exit 0
   fi
 
-  range="${merge_base}..HEAD"
+  from="${merge_base}"
 fi
 
-log "checking commits in ${range}"
-dart run tool/lint_commits.dart --range "${range}" "${passthrough[@]}"
+log "checking commits in ${from}..${to}"
+
+# An empty range is a pass, not a usage error. commitlint rejects --from equal
+# to --to, which would otherwise fail CI on a re-run, on a push that moved
+# nothing, or on a branch whose only commits are merges.
+if [ "$(git rev-list --no-merges --count "${from}..${to}")" -eq 0 ]; then
+  log 'no commits to check'
+  exit 0
+fi
+
+npx --no-install commitlint \
+  --from "${from}" --to "${to}" --verbose "${passthrough[@]}"

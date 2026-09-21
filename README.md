@@ -374,6 +374,7 @@ root, and can be run from any directory.
 | `browser-test.sh` | Runs the `c2pa_crypto` browser suites on Chrome |
 | `test-packages.sh` | Runs package test suites under whichever SDK is on `PATH` |
 | `lint-commits.sh` | Checks that new commit messages follow Conventional Commits |
+| `update-changelogs.sh` | Routes the commits made since the last release into the changelogs |
 | `bump-version.sh` | Sets one version across all seven packages, their sibling constraints, and their changelogs |
 | `publish.sh` | Validates and publishes the workspace to pub.dev in dependency order |
 
@@ -392,8 +393,16 @@ v1.0.0](https://www.conventionalcommits.org/en/v1.0.0/):
 [optional footer(s)]
 ```
 
-The `commits` CI job checks this with `scripts/lint-commits.sh`, which reports
-every violation in a message rather than stopping at the first:
+Enforcement is [commitlint](https://commitlint.js.org) rather than something
+written here, because the rules are the one part of this that other projects
+have already settled. It is a pinned dev dependency, so it needs an install
+before first use:
+
+```sh
+npm ci
+```
+
+The `commits` CI job then runs `scripts/lint-commits.sh`:
 
 ```sh
 scripts/lint-commits.sh                  # this branch against its base
@@ -401,21 +410,84 @@ scripts/lint-commits.sh --base origin/main
 scripts/lint-commits.sh --range HEAD~3..HEAD
 ```
 
-Accepted types are `build`, `chore`, `ci`, `docs`, `feat`, `fix`, `perf`,
-`refactor`, `revert`, `style`, and `test`. The specification permits any noun
-as a type, but an open set cannot catch `feature:` written where `feat:` was
-meant, which is the mistake worth catching. Pass `--types` to override the set
-and `--max-header-length` to change the 100 character subject limit, which is a
-convention rather than a rule of the specification.
+The rules live in `commitlint.config.mjs`, which extends
+`@commitlint/config-conventional`. The types are that baseline's set, unchanged:
+`build`, `chore`, `ci`, `docs`, `feat`, `fix`, `perf`, `refactor`, `revert`,
+`style`, and `test`. The specification permits any noun as a type, but an open
+set cannot catch `feature:` written where `feat:` was meant, which is the
+mistake worth catching.
+
+Two of the inherited defaults are stricter than the specification, and are kept
+because consistency is the point: the type must be lower case, where the
+specification treats types as case insensitive, and the description may not end
+in a full stop, which the specification does not mention at all. The subject
+limit is 100 characters, also a convention rather than a rule.
+
+The scope is optional, but when present it must name a workspace package or the
+workspace itself. Each package may be written in full or by its short form, so
+`fix(c2pa_codec):` and `fix(codec):` are the same thing, and `root` covers
+changes that belong to no package, such as CI, tooling, and documentation:
+
+```
+c2pa            c2pa_io      c2pa_codec   c2pa_crypto
+c2pa_formats    c2pa_testkit c2patool_dart
+io   codec   crypto   formats   testkit   c2patool
+root
+```
+
+The specification leaves scopes open ended, but an open set here would be
+worse than no set at all: the changelog tooling routes by scope, so an invented
+one is accepted and then reaches the root changelog alone, which looks exactly
+like it worked. Rejecting it is the only way that mistake becomes visible.
+
+A change touching several packages may list them, using commitlint's default
+delimiters, so `fix(codec,io):`, `fix(codec, io):`, and `fix(codec/io):` all
+reach both packages. Every part has to name something, so `fix(codec,bogus):`
+is still rejected. A change that applies to every package is better left
+unscoped.
+
+That list is not written down twice. `commitlint.config.mjs` derives it from
+the `workspace:` list in `pubspec.yaml`, so adding a package cannot leave the
+commit rules behind, and `test/changelog_test.dart` runs commitlint's own
+resolved configuration and asserts it matches what the changelog tool will
+route, so the two cannot drift apart unnoticed. The same suite runs commitlint
+against sample messages, so a rule that stops working fails the build rather
+than going unnoticed.
 
 Only the commits a branch introduces are checked, measured from the merge base
-with the target branch. History predating the convention is therefore out of
-scope, and the repository's own root commit does not conform. Merge commits are
-skipped because their messages are generated rather than written.
+with the target branch, so history predating the convention stays out of scope.
+Merge commits are skipped because their messages are generated rather than
+written.
 
 Breaking changes are marked with `!` before the colon, or with an uppercase
-`BREAKING CHANGE:` footer; the linter rejects a lower case footer token because
+`BREAKING CHANGE:` footer; a lower case footer token does not count, because
 the specification requires that one to be uppercase.
+
+### Changelogs
+
+`scripts/update-changelogs.sh` collects the commits made since the most recent
+release and writes them into the section for the current version. A release is
+a `build` commit whose description is nothing but the version, such as
+`build: 0.1.0-dev.2`, which is what the release flow below produces. Requiring
+the version keeps an ordinary build change, such as `build: raise the lint
+version`, from being mistaken for a boundary and truncating the next changelog.
+
+Routing follows the scope. The root `CHANGELOG.md` receives everything. A
+package changelog receives the commits that are unscoped or scoped to that
+package, so `fix:` reaches every package, `fix(codec):` reaches `c2pa_codec`
+and the root, `fix(codec,io):` reaches both of those, and `fix(root):` reaches
+the root alone. Entries always name the package in full, whichever form the
+commit used, so one package reads the same way throughout a changelog.
+
+```sh
+scripts/update-changelogs.sh --dry-run   # show what would be written
+scripts/update-changelogs.sh             # write the sections
+```
+
+It refuses to overwrite a section that already has notes unless `--force` is
+passed, and it plans every file before writing any of them, so a refusal leaves
+the tree untouched rather than half updated. The placeholder that
+`bump-version.sh` leaves behind does not count as notes.
 
 ### Releasing
 
@@ -429,9 +501,11 @@ because publishing is irreversible, and requires an explicit `--publish` to
 upload anything:
 
 ```sh
-scripts/bump-version.sh 0.1.0-dev.2   # then edit the CHANGELOG entries
+scripts/bump-version.sh 0.1.0-dev.2   # set the version everywhere
+scripts/update-changelogs.sh          # fill in the entries, then edit them
 scripts/publish.sh                    # validate everything, upload nothing
 scripts/publish.sh --publish --tag    # upload in dependency order, then tag
+git commit -m "build: 0.1.0-dev.2"    # marks where the next changelog starts
 ```
 
 It checks that all packages agree on the version, that each has a changelog

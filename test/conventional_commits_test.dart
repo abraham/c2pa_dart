@@ -2,223 +2,120 @@ import 'package:test/test.dart';
 
 import '../tool/conventional_commits.dart';
 
-List<String> rulesFor(String message, {CommitRules? rules}) =>
-    validateCommitMessage(
-      message,
-      rules: rules ?? const CommitRules(),
-    ).map((violation) => violation.rule).toList();
-
 void main() {
-  group('conforming messages', () {
-    test('accepts a minimal header', () {
-      expect(validateCommitMessage('fix: correct the offset'), isEmpty);
+  group('header', () {
+    test('parses a minimal header', () {
+      final commit = parseConventionalCommit('fix: correct the offset')!;
+      expect(commit.type, 'fix');
+      expect(commit.scope, isNull);
+      expect(commit.description, 'correct the offset');
+      expect(commit.isBreaking, isFalse);
     });
 
-    test('accepts a scope', () {
-      expect(validateCommitMessage('feat(codec): add a cbor reader'), isEmpty);
+    test('parses a scope', () {
+      final commit = parseConventionalCommit('feat(codec): add a reader')!;
+      expect(commit.type, 'feat');
+      expect(commit.scope, 'codec');
+      expect(commit.description, 'add a reader');
     });
 
-    test('accepts a breaking change marker', () {
+    test('keeps the type in its original case', () {
+      expect(parseConventionalCommit('Feat: add a reader')!.type, 'Feat');
+    });
+
+    test('parses an empty description', () {
+      expect(parseConventionalCommit('fix:')!.description, isEmpty);
+      expect(parseConventionalCommit('fix: ')!.description, isEmpty);
+    });
+
+    test('parses an empty scope as empty, not absent', () {
+      expect(parseConventionalCommit('fix(): a thing')!.scope, isEmpty);
+    });
+  });
+
+  group('breaking changes', () {
+    test('detects the bang marker', () {
+      expect(parseConventionalCommit('feat!: drop it')!.isBreaking, isTrue);
+    });
+
+    test('detects the bang marker alongside a scope', () {
       expect(
-        validateCommitMessage('feat(codec)!: drop the legacy reader'),
-        isEmpty,
+        parseConventionalCommit('feat(codec)!: drop it')!.isBreaking,
+        isTrue,
       );
     });
 
-    test('accepts a body after a blank line', () {
+    test('detects an uppercase footer', () {
       expect(
-        validateCommitMessage(
-          'fix: correct the offset\n\nThe reader skipped a byte.',
-        ),
-        isEmpty,
+        parseConventionalCommit(
+          'feat: replace it\n\nBREAKING CHANGE: the old one is gone',
+        )!.isBreaking,
+        isTrue,
       );
     });
 
-    test('accepts an uppercase BREAKING CHANGE footer', () {
+    test('detects the hyphenated synonym', () {
       expect(
-        validateCommitMessage(
-          'feat: replace the reader\n\nBody text.\n\n'
-          'BREAKING CHANGE: the old reader is gone',
-        ),
-        isEmpty,
+        parseConventionalCommit(
+          'feat: replace it\n\nBREAKING-CHANGE: the old one is gone',
+        )!.isBreaking,
+        isTrue,
       );
     });
 
-    test('accepts the BREAKING-CHANGE synonym', () {
-      expect(
-        validateCommitMessage(
-          'feat: replace the reader\n\nBREAKING-CHANGE: the old reader is gone',
-        ),
-        isEmpty,
-      );
-    });
-
-    test('accepts every default type', () {
-      for (final type in defaultCommitTypes) {
+    test(
+      'ignores a lower case footer, which the specification does not allow',
+      () {
         expect(
-          validateCommitMessage('$type: do the thing'),
-          isEmpty,
-          reason: 'expected "$type" to be accepted',
+          parseConventionalCommit(
+            'feat: replace it\n\nbreaking change: the old one is gone',
+          )!.isBreaking,
+          isFalse,
         );
-      }
-    });
-
-    test(
-      'treats the type case insensitively, as the specification requires',
-      () {
-        expect(validateCommitMessage('Feat: add a reader'), isEmpty);
       },
     );
 
-    test('normalizes carriage returns', () {
+    test('ignores prose that merely mentions a breaking change', () {
       expect(
-        validateCommitMessage('fix: correct the offset\r\n\r\nBody.'),
-        isEmpty,
-      );
-    });
-
-    test('ignores trailing whitespace left by git', () {
-      expect(validateCommitMessage('fix: correct the offset\n\n'), isEmpty);
-    });
-
-    test('leaves prose mentioning a breaking change alone', () {
-      expect(
-        validateCommitMessage(
-          'fix: correct the offset\n\n'
-          'This is not a breaking change: the offset was wrong.',
-        ),
-        isEmpty,
+        parseConventionalCommit(
+          'fix: correct it\n\nThis is not a breaking change: it was wrong.',
+        )!.isBreaking,
+        isFalse,
       );
     });
   });
 
-  group('header format', () {
-    test('rejects a message with no prefix', () {
-      expect(rulesFor('correct the offset'), contains('header-format'));
+  group('unparseable input', () {
+    test('returns null with no prefix', () {
+      expect(parseConventionalCommit('correct the offset'), isNull);
     });
 
-    test('rejects a missing space after the colon', () {
-      final violations = validateCommitMessage('fix:correct the offset');
-      expect(violations.map((v) => v.rule), contains('header-format'));
-      expect(violations.single.message, contains('followed by a space'));
+    test('returns null without the space after the colon', () {
+      expect(parseConventionalCommit('fix:correct the offset'), isNull);
     });
 
-    test('rejects an empty description', () {
-      expect(rulesFor('fix: '), contains('description-empty'));
+    test('returns null for a non alphabetic type', () {
+      expect(parseConventionalCommit('fix 2: correct the offset'), isNull);
     });
 
-    test(
-      'rejects an empty description after git strips the trailing space',
-      () {
-        expect(rulesFor('fix:'), contains('description-empty'));
-      },
-    );
-
-    test('reports both an empty scope and an empty description', () {
-      expect(
-        rulesFor('fix():'),
-        containsAll(<String>['scope-empty', 'description-empty']),
-      );
+    test('returns null for an empty message', () {
+      expect(parseConventionalCommit('   \n  '), isNull);
     });
 
-    test('rejects an empty scope', () {
-      expect(rulesFor('fix(): correct the offset'), contains('scope-empty'));
-    });
-
-    test('rejects a non alphabetic type', () {
-      expect(rulesFor('fix 2: correct the offset'), contains('header-format'));
-    });
-
-    test('rejects an empty message', () {
-      expect(rulesFor('   \n  '), contains('empty-message'));
+    test('returns null for a merge commit subject', () {
+      expect(parseConventionalCommit("Merge branch 'side'"), isNull);
     });
   });
 
-  group('type allowlist', () {
-    test('rejects "feature", the common misspelling of "feat"', () {
-      final violations = validateCommitMessage('feature: initial version');
-      expect(violations.map((v) => v.rule), contains('type-allowed'));
-      expect(violations.single.message, contains('feat'));
-    });
-
-    test('honours a custom type set', () {
-      const rules = CommitRules(types: {'feat', 'fix'});
-      expect(
-        rulesFor('chore: tidy up', rules: rules),
-        contains('type-allowed'),
-      );
-      expect(rulesFor('feat: add a reader', rules: rules), isEmpty);
-    });
+  test('normalizes carriage returns', () {
+    final commit = parseConventionalCommit('fix: correct it\r\n\r\nBody.')!;
+    expect(commit.description, 'correct it');
   });
 
-  group('body', () {
-    test('rejects a body that is not preceded by a blank line', () {
-      expect(
-        rulesFor('fix: correct the offset\nThe reader skipped a byte.'),
-        contains('body-leading-blank'),
-      );
-    });
-  });
-
-  group('breaking change footer', () {
-    test('rejects a lowercase footer token', () {
-      expect(
-        rulesFor(
-          'feat: replace the reader\n\nbreaking change: the old reader is gone',
-        ),
-        contains('breaking-change-uppercase'),
-      );
-    });
-
-    test('rejects a mixed case hyphenated token', () {
-      expect(
-        rulesFor(
-          'feat: replace the reader\n\nBreaking-Change: the old reader is gone',
-        ),
-        contains('breaking-change-uppercase'),
-      );
-    });
-
-    test('reports the offending line number', () {
-      final violations = validateCommitMessage(
-        'feat: replace the reader\n\nBody.\n\nbreaking change: gone',
-      );
-      expect(violations.single.message, contains('line 5'));
-    });
-  });
-
-  group('header length', () {
-    test('rejects a header over the maximum', () {
-      final header = 'fix: ${'a' * 120}';
-      expect(rulesFor(header), contains('header-max-length'));
-    });
-
-    test('accepts a long header when the check is disabled', () {
-      final header = 'fix: ${'a' * 120}';
-      expect(
-        rulesFor(header, rules: const CommitRules(maxHeaderLength: 0)),
-        isEmpty,
-      );
-    });
-
-    test('measures only the header, not the body', () {
-      final message = 'fix: correct the offset\n\n${'a' * 200}';
-      expect(rulesFor(message), isEmpty);
-    });
-  });
-
-  test('reports every violation in one message, not just the first', () {
-    final violations = validateCommitMessage(
-      'nope(): \nBody without a blank line.',
-    );
+  test('ignores the trailing newlines git leaves behind', () {
     expect(
-      violations.map((v) => v.rule),
-      containsAll(<String>[
-        'type-allowed',
-        'scope-empty',
-        'description-empty',
-        'body-leading-blank',
-      ]),
+      parseConventionalCommit('fix: correct it\n\n')!.description,
+      'correct it',
     );
   });
 }

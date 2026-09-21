@@ -1,0 +1,17 @@
+{
+  "name": "c2pa-dart-commit-tooling",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Commit message linting for the c2pa_dart workspace. Nothing here ships; the Dart packages are the product.",
+  "license": "MIT OR Apache-2.0",
+  "scripts": {
+    "commitlint": "commitlint"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "21.2.3",
+    "@commitlint/config-conventional": "21.2.3"
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  }
+}

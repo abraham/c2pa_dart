@@ -14,6 +14,9 @@ concurrency:
 env:
   DART_SDK_VERSION: 3.13.4
   FLUTTER_VERSION: 3.47.5
+  # commitlint 21 requires >= 22.12.0; pinned for the same reason the Dart and
+  # Flutter versions are.
+  NODE_VERSION: 22.23.2
 
 jobs:
   commits:
@@ -23,7 +26,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
-      PUB_CACHE: ${{ runner.temp }}/pub-cache
       # Not a default variable; scripts/lint-commits.sh uses it on push events
       # to bound the range to the commits actually being pushed.
       GITHUB_EVENT_BEFORE: ${{ github.event.before }}
@@ -33,11 +35,12 @@ jobs:
           # The merge base with the target branch has to be reachable, which a
           # shallow checkout cannot guarantee.
           fetch-depth: 0
-      - uses: dart-lang/setup-dart@v1
+      - uses: actions/setup-node@v4
         with:
-          sdk: ${{ env.DART_SDK_VERSION }}
-      - name: Resolve workspace
-        run: dart pub get
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - name: Install commitlint
+        run: npm ci
       - name: Check commit messages
         run: scripts/lint-commits.sh
   dart:
@@ -55,6 +58,14 @@ jobs:
       - uses: dart-lang/setup-dart@v1
         with:
           sdk: ${{ env.DART_SDK_VERSION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - name: Install commitlint
+        # The workspace test suite checks that commitlint's scope rules agree
+        # with what the changelog tooling routes, which needs it installed.
+        run: npm ci
       - name: Cache pub packages
         uses: actions/cache@v4
         with:
