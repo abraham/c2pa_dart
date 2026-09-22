@@ -2,7 +2,7 @@
 # Runs the c2pa_crypto test suites that must also pass in a browser.
 #
 # These cover the code whose behaviour differs most between the VM and the web:
-# WebCrypto backends, certificate handling, and the network-facing revocation
+# PointyCastle backends, certificate handling, and the network-facing revocation
 # and timestamp parsers.
 #
 # Usage:
@@ -36,7 +36,7 @@ readonly SUITES=(
   test/path_validation_test.dart
   test/timestamp_test.dart
   test/trust_list_test.dart
-  test/webcrypto_backend_test.dart
+  test/pointycastle_backend_test.dart
   test/x509_certificate_test.dart
 )
 

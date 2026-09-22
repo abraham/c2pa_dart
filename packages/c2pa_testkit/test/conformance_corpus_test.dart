@@ -244,13 +244,13 @@ Future<void> _verifySignatureVector(ConformanceFixture fixture) async {
   final valid = switch (algorithm) {
     SigningAlgorithm.ps256 ||
     SigningAlgorithm.ps384 ||
-    SigningAlgorithm.ps512 => WebCryptoRsaPssVerificationBackend(
+    SigningAlgorithm.ps512 => RsaPssVerificationBackend(
       algorithm,
       await importRsaPssPublicKeySpki(algorithm, key),
     ).verify(algorithm, message, signature),
     SigningAlgorithm.es256 ||
     SigningAlgorithm.es384 ||
-    SigningAlgorithm.es512 => WebCryptoEcdsaVerificationBackend(
+    SigningAlgorithm.es512 => EcdsaVerificationBackend(
       algorithm,
       await importEcdsaPublicKeySpki(algorithm, key),
     ).verify(algorithm, message, signature),

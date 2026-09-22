@@ -28,7 +28,6 @@ dependencies:
   c2pa_codec: ^0.1.0-dev.1
   c2pa_io: ^0.1.0-dev.1
   cryptography: ^2.9.0
-  webcrypto: ^0.6.1
-
+  pointycastle: ^4.0.0
 dev_dependencies:
   test: ^1.26.3

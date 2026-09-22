@@ -1,13 +1,15 @@
 @TestOn('vm || browser')
 library;
 
+import 'dart:typed_data';
+
 import 'package:c2pa_codec/c2pa_codec.dart';
 import 'package:c2pa_crypto/c2pa_crypto.dart';
+import 'package:pointycastle/export.dart' as pc;
 import 'package:test/test.dart';
-import 'package:webcrypto/webcrypto.dart' as webcrypto;
 
 void main() {
-  group('WebCrypto ECDSA backends', () {
+  group('PointyCastle ECDSA backends', () {
     for (final algorithm in [
       SigningAlgorithm.es256,
       SigningAlgorithm.es384,
@@ -17,8 +19,14 @@ void main() {
         '${algorithm.name} generated-key sign, verify, and tamper',
         () async {
           final generated = await generateEcdsaKeyPair(algorithm);
-          final privateBytes = await generated.privateKey.exportPkcs8Key();
-          final publicBytes = await generated.publicKey.exportSpkiKey();
+          final privateBytes = encodeEcdsaPrivateKeyPkcs8(
+            generated.privateKey,
+            algorithm,
+          );
+          final publicBytes = encodeEcdsaPublicKeySpki(
+            generated.publicKey,
+            algorithm,
+          );
           final privateKey = await importEcdsaPrivateKeyPkcs8(
             algorithm,
             privateBytes,
@@ -27,11 +35,8 @@ void main() {
             algorithm,
             publicBytes,
           );
-          final signerBackend = WebCryptoEcdsaSigningBackend(
-            algorithm,
-            privateKey,
-          );
-          final verifierBackend = WebCryptoEcdsaVerificationBackend(
+          final signerBackend = EcdsaSigningBackend(algorithm, privateKey);
+          final verifierBackend = EcdsaVerificationBackend(
             algorithm,
             publicKey,
           );
@@ -84,7 +89,7 @@ void main() {
 
     test('rejects curve and configured algorithm mismatches', () async {
       final p256 = await generateEcdsaKeyPair(SigningAlgorithm.es256);
-      final backend = WebCryptoEcdsaSigningBackend(
+      final backend = EcdsaSigningBackend(
         SigningAlgorithm.es384,
         p256.privateKey,
       );
@@ -93,7 +98,7 @@ void main() {
         throwsA(isA<InvalidKeyForAlgorithmException>()),
       );
       await expectLater(
-        () => WebCryptoEcdsaSigningBackend(
+        () => EcdsaSigningBackend(
           SigningAlgorithm.es256,
           p256.privateKey,
         ).sign(SigningAlgorithm.es384, [1]),
@@ -107,7 +112,10 @@ void main() {
         throwsA(isA<InvalidKeyForAlgorithmException>()),
       );
       final p256 = await generateEcdsaKeyPair(SigningAlgorithm.es256);
-      final spki = await p256.publicKey.exportSpkiKey();
+      final spki = encodeEcdsaPublicKeySpki(
+        p256.publicKey,
+        SigningAlgorithm.es256,
+      );
       await expectLater(
         () => importEcdsaPublicKeySpki(SigningAlgorithm.es384, spki),
         throwsA(isA<InvalidKeyForAlgorithmException>()),
@@ -119,7 +127,7 @@ void main() {
     });
   });
 
-  group('WebCrypto RSA-PSS backends', () {
+  group('PointyCastle RSA-PSS backends', () {
     for (final algorithm in [
       SigningAlgorithm.ps256,
       SigningAlgorithm.ps384,
@@ -129,8 +137,10 @@ void main() {
         '${algorithm.name} generated-key sign, verify, and tamper',
         () async {
           final generated = await generateRsaPssKeyPair(algorithm);
-          final privateBytes = await generated.privateKey.exportPkcs8Key();
-          final publicBytes = await generated.publicKey.exportSpkiKey();
+          final privateBytes = encodeRsaPssPrivateKeyPkcs8(
+            generated.privateKey,
+          );
+          final publicBytes = encodeRsaPssPublicKeySpki(generated.publicKey);
           final privateKey = await importRsaPssPrivateKeyPkcs8(
             algorithm,
             privateBytes,
@@ -139,11 +149,8 @@ void main() {
             algorithm,
             publicBytes,
           );
-          final signerBackend = WebCryptoRsaPssSigningBackend(
-            algorithm,
-            privateKey,
-          );
-          final verifierBackend = WebCryptoRsaPssVerificationBackend(
+          final signerBackend = RsaPssSigningBackend(algorithm, privateKey);
+          final verifierBackend = RsaPssVerificationBackend(
             algorithm,
             publicKey,
           );
@@ -193,21 +200,20 @@ void main() {
       );
     }
 
-    test('rejects key and configured algorithm mismatches', () async {
+    test('rejects configured algorithm mismatches', () async {
       final ps256 = await generateRsaPssKeyPair(SigningAlgorithm.ps256);
-      final backend = WebCryptoRsaPssVerificationBackend(
-        SigningAlgorithm.ps384,
-        ps256.publicKey,
-      );
       await expectLater(
-        () => backend.verify(SigningAlgorithm.ps384, [1], [2]),
-        throwsA(isA<InvalidKeyForAlgorithmException>()),
-      );
-      await expectLater(
-        () => WebCryptoRsaPssSigningBackend(
+        () => RsaPssSigningBackend(
           SigningAlgorithm.ps256,
           ps256.privateKey,
         ).sign(SigningAlgorithm.ps512, [1]),
+        throwsA(isA<AlgorithmMismatchException>()),
+      );
+      await expectLater(
+        () => RsaPssVerificationBackend(
+          SigningAlgorithm.ps256,
+          ps256.publicKey,
+        ).verify(SigningAlgorithm.ps384, [1], [2]),
         throwsA(isA<AlgorithmMismatchException>()),
       );
     });
@@ -232,34 +238,42 @@ void main() {
     });
 
     test('imports generic rsaEncryption SPKI for every PSS hash', () async {
-      final generic = await webcrypto.RsassaPkcs1V15PrivateKey.generateKey(
-        2048,
-        BigInt.from(65537),
-        webcrypto.Hash.sha256,
-      );
-      final spki = await generic.publicKey.exportSpkiKey();
-      final pkcs8 = await generic.privateKey.exportPkcs8Key();
+      final generator = pc.RSAKeyGenerator()
+        ..init(
+          pc.ParametersWithRandom(
+            pc.RSAKeyGeneratorParameters(BigInt.from(65537), 2048, 64),
+            _testSecureRandom(),
+          ),
+        );
+      final generic = generator.generateKeyPair();
+      final spki = encodeRsaPssPublicKeySpki(generic.publicKey);
       for (final entry in {
-        SigningAlgorithm.ps256: (webcrypto.Hash.sha256, 32),
-        SigningAlgorithm.ps384: (webcrypto.Hash.sha384, 48),
-        SigningAlgorithm.ps512: (webcrypto.Hash.sha512, 64),
+        SigningAlgorithm.ps256: (() => pc.SHA256Digest(), 32),
+        SigningAlgorithm.ps384: (() => pc.SHA384Digest(), 48),
+        SigningAlgorithm.ps512: (() => pc.SHA512Digest(), 64),
       }.entries) {
         final publicKey = await importRsaPssPublicKeySpki(entry.key, spki);
-        final privateKey = await webcrypto.RsaPssPrivateKey.importPkcs8Key(
-          pkcs8,
-          entry.value.$1,
+        final digestFactory = entry.value.$1;
+        final saltLength = entry.value.$2;
+        final signer =
+            pc.PSSSigner(pc.RSAEngine(), digestFactory(), digestFactory())
+              ..init(
+                true,
+                pc.ParametersWithSaltConfiguration(
+                  pc.PrivateKeyParameter<pc.RSAPrivateKey>(generic.privateKey),
+                  _testSecureRandom(),
+                  saltLength,
+                ),
+              );
+        final signature = signer.generateSignature(
+          Uint8List.fromList(const [1, 2, 3]),
         );
-        final signature = await privateKey.signBytes(const [
-          1,
-          2,
-          3,
-        ], entry.value.$2);
         expect(
-          await publicKey.verifyBytes(signature, const [
+          _verifyRsaPss(publicKey, digestFactory, saltLength, const [
             1,
             2,
             3,
-          ], entry.value.$2),
+          ], signature.bytes),
           isTrue,
         );
       }
@@ -272,34 +286,96 @@ void main() {
         SigningAlgorithm.ps512: 64,
       }.entries) {
         final keys = await generateRsaPssKeyPair(entry.key);
-        final backend = WebCryptoRsaPssSigningBackend(
-          entry.key,
-          keys.privateKey,
-        );
+        final backend = RsaPssSigningBackend(entry.key, keys.privateKey);
         final signature = await backend.sign(entry.key, [1, 2, 3]);
+        final digestFactory = switch (entry.key) {
+          SigningAlgorithm.ps256 => () => pc.SHA256Digest(),
+          SigningAlgorithm.ps384 => () => pc.SHA384Digest(),
+          SigningAlgorithm.ps512 => () => pc.SHA512Digest(),
+          _ => throw StateError('unreachable'),
+        };
         expect(
-          await keys.publicKey.verifyBytes(signature, [1, 2, 3], entry.value),
-          isTrue,
-        );
-        expect(
-          await keys.publicKey.verifyBytes(signature, [
+          _verifyRsaPss(keys.publicKey, digestFactory, entry.value, const [
             1,
             2,
             3,
-          ], entry.value - 1),
+          ], signature),
+          isTrue,
+        );
+        expect(
+          _verifyRsaPss(keys.publicKey, digestFactory, entry.value - 1, const [
+            1,
+            2,
+            3,
+          ], signature),
           isFalse,
         );
       }
     });
   });
 
-  test('P-521 unavailability is surfaced explicitly', () async {
-    try {
-      final keys = await generateEcdsaKeyPair(SigningAlgorithm.es512);
-      expect(keys.publicKey, isA<webcrypto.EcdsaPublicKey>());
-    } on PlatformAlgorithmUnavailableException catch (error) {
-      expect(error.algorithm, SigningAlgorithm.es512);
-      expect(error.message, contains('unavailable'));
-    }
+  test('P-521 keys round-trip through PKCS#8 and SPKI', () async {
+    final keys = await generateEcdsaKeyPair(SigningAlgorithm.es512);
+    final privateBytes = encodeEcdsaPrivateKeyPkcs8(
+      keys.privateKey,
+      SigningAlgorithm.es512,
+    );
+    final publicBytes = encodeEcdsaPublicKeySpki(
+      keys.publicKey,
+      SigningAlgorithm.es512,
+    );
+    final privateKey = await importEcdsaPrivateKeyPkcs8(
+      SigningAlgorithm.es512,
+      privateBytes,
+    );
+    final publicKey = await importEcdsaPublicKeySpki(
+      SigningAlgorithm.es512,
+      publicBytes,
+    );
+    final signerBackend = EcdsaSigningBackend(
+      SigningAlgorithm.es512,
+      privateKey,
+    );
+    final verifierBackend = EcdsaVerificationBackend(
+      SigningAlgorithm.es512,
+      publicKey,
+    );
+    final signature = await signerBackend.sign(SigningAlgorithm.es512, [1, 2]);
+    expect(
+      await verifierBackend.verify(SigningAlgorithm.es512, [1, 2], signature),
+      isTrue,
+    );
   });
+}
+
+bool _verifyRsaPss(
+  pc.RSAPublicKey key,
+  pc.Digest Function() digest,
+  int saltLength,
+  List<int> data,
+  List<int> signature,
+) {
+  final verifier = pc.PSSSigner(pc.RSAEngine(), digest(), digest())
+    ..init(
+      false,
+      pc.ParametersWithSaltConfiguration(
+        pc.PublicKeyParameter<pc.RSAPublicKey>(key),
+        _testSecureRandom(),
+        saltLength,
+      ),
+    );
+  try {
+    return verifier.verifySignature(
+      Uint8List.fromList(data),
+      pc.PSSSignature(Uint8List.fromList(signature)),
+    );
+  } on ArgumentError {
+    return false;
+  }
+}
+
+pc.SecureRandom _testSecureRandom() {
+  final random = pc.FortunaRandom();
+  random.seed(pc.KeyParameter(Uint8List.fromList(List<int>.filled(32, 7))));
+  return random;
 }

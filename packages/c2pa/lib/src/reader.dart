@@ -3251,17 +3251,17 @@ final class C2paReader {
       ),
       SigningAlgorithm.es256 ||
       SigningAlgorithm.es384 ||
-      SigningAlgorithm.es512 => WebCryptoEcdsaVerificationBackend(
+      SigningAlgorithm.es512 => EcdsaVerificationBackend(
         algorithm,
         await importEcdsaPublicKeySpki(algorithm, leaf.subjectPublicKeyInfoDer),
       ),
       SigningAlgorithm.ps256 ||
       SigningAlgorithm.ps384 ||
-      SigningAlgorithm.ps512 => WebCryptoRsaPssVerificationBackend(
+      SigningAlgorithm.ps512 => RsaPssVerificationBackend(
         algorithm,
         await importRsaPssPublicKeySpki(
           algorithm,
-          // WebCrypto imports RSA keys through rsaEncryption SPKI. The
+          // importRsaPssPublicKeySpki accepts rsaEncryption SPKI directly. The
           // original RSASSA-PSS parameters remain enforced by profile checks.
           leaf.subjectPublicKeyAlgorithm.oid == '1.2.840.113549.1.1.10'
               ? _rsaEncryptionSubjectPublicKeyInfo(leaf.subjectPublicKey)
