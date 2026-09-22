@@ -5,9 +5,11 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:c2pa_crypto/c2pa_crypto.dart';
+import 'package:c2pa_crypto/src/der_writer.dart';
+import 'package:c2pa_crypto/src/key_encoding.dart' as keyenc;
 import 'package:cryptography/cryptography.dart' as cryptography;
+import 'package:pointycastle/export.dart' as pc;
 import 'package:test/test.dart';
-import 'package:webcrypto/webcrypto.dart' as webcrypto;
 
 void main() {
   late _Key rootAKey;
@@ -220,10 +222,15 @@ void main() {
   });
 
   test('verifies ECDSA DER certificate signatures', () async {
-    final issuer = await webcrypto.EcdsaPrivateKey.generateKey(
-      webcrypto.EllipticCurve.p256,
+    final issuer = await generateEcdsaKeyPair(SigningAlgorithm.es256);
+    final issuerSpki = keyenc.encodeEcdsaPublicKeySpki(
+      issuer.publicKey,
+      keyenc.prime256v1Oid,
     );
-    final issuerSpki = await issuer.publicKey.exportSpkiKey();
+    Future<List<int>> sign(List<int> tbs) async => ecdsaP1363ToDer(
+      _signEcdsaRaw(issuer.privateKey, pc.SHA256Digest(), tbs, 32),
+      componentLength: 32,
+    );
     final root = await _customCertificate(
       subject: 'EC Root',
       issuer: 'EC Root',
@@ -232,10 +239,7 @@ void main() {
       serial: 50,
       isCa: true,
       signatureAlgorithm: _sequence([_oid('1.2.840.10045.4.3.2')]),
-      sign: (tbs) async => ecdsaP1363ToDer(
-        await issuer.privateKey.signBytes(tbs, webcrypto.Hash.sha256),
-        componentLength: 32,
-      ),
+      sign: sign,
     );
     final leaf = await _customCertificate(
       subject: 'Leaf',
@@ -245,10 +249,7 @@ void main() {
       authorityKeyIdentifier: [20],
       serial: 51,
       signatureAlgorithm: _sequence([_oid('1.2.840.10045.4.3.2')]),
-      sign: (tbs) async => ecdsaP1363ToDer(
-        await issuer.privateKey.signBytes(tbs, webcrypto.Hash.sha256),
-        componentLength: 32,
-      ),
+      sign: sign,
     );
     final result = await validateCertificatePath(
       leaf,
@@ -262,18 +263,19 @@ void main() {
   });
 
   test('verifies RSA-PSS certificate signatures', () async {
-    final issuer = await webcrypto.RsaPssPrivateKey.generateKey(
-      2048,
-      BigInt.from(65537),
-      webcrypto.Hash.sha256,
-    );
+    final issuer = await generateRsaPssKeyPair(SigningAlgorithm.ps256);
     final signatureAlgorithm = _rsaPssSha256Algorithm();
-    Future<List<int>> sign(List<int> tbs) =>
-        issuer.privateKey.signBytes(tbs, 32);
+    Future<List<int>> sign(List<int> tbs) async => _signRsaPss(
+      issuer.privateKey,
+      pc.SHA256Digest(),
+      pc.SHA256Digest(),
+      32,
+      tbs,
+    );
     final root = await _customCertificate(
       subject: 'PSS Root',
       issuer: 'PSS Root',
-      subjectSpki: await issuer.publicKey.exportSpkiKey(),
+      subjectSpki: keyenc.encodeRsaPublicKeySpki(issuer.publicKey),
       subjectIdentifier: [22],
       serial: 55,
       isCa: true,
@@ -827,17 +829,18 @@ void main() {
   });
 
   test('ignores the RSA modulus floor for an ECDSA signer', () async {
-    final ecPair = await webcrypto.EcdsaPrivateKey.generateKey(
-      webcrypto.EllipticCurve.p256,
-    );
+    final ecPair = await generateEcdsaKeyPair(SigningAlgorithm.es256);
     final der = await _customCertificate(
       subject: 'EC Leaf',
       issuer: 'Root A',
-      subjectSpki: await ecPair.publicKey.exportSpkiKey(),
+      subjectSpki: keyenc.encodeEcdsaPublicKeySpki(
+        ecPair.publicKey,
+        keyenc.prime256v1Oid,
+      ),
       subjectIdentifier: const [9, 9, 9],
       serial: 92,
       signatureAlgorithm: _sequence([_oid('1.2.840.113549.1.1.11'), _null()]),
-      sign: (tbs) => rootAKey.privateKey.signBytes(tbs),
+      sign: (tbs) async => _signPkcs1Sha256(rootAKey.privateKey, tbs),
     );
     final issues = validateC2paSignerCertificate(
       X509Certificate.parse(der),
@@ -917,20 +920,19 @@ typedef _Chain = ({Uint8List root, Uint8List intermediate, Uint8List leaf});
 final class _Key {
   const _Key(this.privateKey, this.spki, this.identifier);
 
-  final webcrypto.RsassaPkcs1V15PrivateKey privateKey;
+  final pc.RSAPrivateKey privateKey;
   final Uint8List spki;
   final Uint8List identifier;
 }
 
 Future<_Key> _generateKey(int identifier, {int modulusBits = 2048}) async {
-  final pair = await webcrypto.RsassaPkcs1V15PrivateKey.generateKey(
-    modulusBits,
-    BigInt.from(65537),
-    webcrypto.Hash.sha256,
+  final pair = await generateRsaPssKeyPair(
+    SigningAlgorithm.ps256,
+    modulusLength: modulusBits,
   );
   return _Key(
     pair.privateKey,
-    await pair.publicKey.exportSpkiKey(),
+    keyenc.encodeRsaPublicKeySpki(pair.publicKey),
     Uint8List.fromList([identifier, identifier, identifier]),
   );
 }
@@ -995,7 +997,7 @@ Future<Uint8List> _certificate({
     subjectKey.spki,
     _tlv(0xa3, _sequence(extensions)),
   ]);
-  final signature = await issuerKey.privateKey.signBytes(tbs);
+  final signature = _signPkcs1Sha256(issuerKey.privateKey, tbs);
   if (corruptSignature) {
     signature[0] ^= 1;
   }
@@ -1208,4 +1210,66 @@ List<int> _length(int length) {
     remaining >>= 8;
   }
   return [0x80 | bytes.length, ...bytes];
+}
+
+/// Signs [data] with RSASSA-PKCS1-v1.5 using SHA-256, as a pure-Dart
+/// replacement for webcrypto's `RsassaPkcs1V15PrivateKey.signBytes`.
+Uint8List _signPkcs1Sha256(pc.RSAPrivateKey key, List<int> data) {
+  final signer = pc.RSASigner(pc.SHA256Digest(), '0609608648016503040201')
+    ..init(true, pc.PrivateKeyParameter<pc.RSAPrivateKey>(key));
+  return signer.generateSignature(Uint8List.fromList(data)).bytes;
+}
+
+/// Signs [data] with RSASSA-PSS using [contentDigest]/[mgfDigest] and
+/// [saltLength], as a pure-Dart replacement for webcrypto's
+/// `RsaPssPrivateKey.signBytes`.
+Uint8List _signRsaPss(
+  pc.RSAPrivateKey key,
+  pc.Digest contentDigest,
+  pc.Digest mgfDigest,
+  int saltLength,
+  List<int> data,
+) {
+  final signer = pc.PSSSigner(pc.RSAEngine(), contentDigest, mgfDigest)
+    ..init(
+      true,
+      pc.ParametersWithSaltConfiguration(
+        pc.PrivateKeyParameter<pc.RSAPrivateKey>(key),
+        _testSecureRandom(),
+        saltLength,
+      ),
+    );
+  return signer.generateSignature(Uint8List.fromList(data)).bytes;
+}
+
+/// Produces a fixed-width big-endian P1363 ECDSA signature over [data], as a
+/// pure-Dart replacement for webcrypto's `EcdsaPrivateKey.signBytes`.
+Uint8List _signEcdsaRaw(
+  pc.ECPrivateKey key,
+  pc.Digest digest,
+  List<int> data,
+  int componentLength,
+) {
+  final signer = pc.ECDSASigner(digest)
+    ..init(
+      true,
+      pc.ParametersWithRandom(
+        pc.PrivateKeyParameter<pc.ECPrivateKey>(key),
+        _testSecureRandom(),
+      ),
+    );
+  final signature =
+      signer.generateSignature(Uint8List.fromList(data)) as pc.ECSignature;
+  return Uint8List.fromList([
+    ...derFixedWidthUnsigned(signature.r, componentLength),
+    ...derFixedWidthUnsigned(signature.s, componentLength),
+  ]);
+}
+
+pc.SecureRandom _testSecureRandom() {
+  final random = pc.FortunaRandom();
+  random.seed(
+    pc.KeyParameter(Uint8List.fromList(List<int>.generate(32, (i) => i + 1))),
+  );
+  return random;
 }

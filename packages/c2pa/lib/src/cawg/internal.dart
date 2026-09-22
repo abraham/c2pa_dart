@@ -93,7 +93,7 @@ Future<CoseVerificationBackend> _verificationBackend(
     case SigningAlgorithm.es256:
     case SigningAlgorithm.es384:
     case SigningAlgorithm.es512:
-      return WebCryptoEcdsaVerificationBackend(
+      return EcdsaVerificationBackend(
         algorithm,
         await importEcdsaPublicKeySpki(
           algorithm,
@@ -103,7 +103,7 @@ Future<CoseVerificationBackend> _verificationBackend(
     case SigningAlgorithm.ps256:
     case SigningAlgorithm.ps384:
     case SigningAlgorithm.ps512:
-      return WebCryptoRsaPssVerificationBackend(
+      return RsaPssVerificationBackend(
         algorithm,
         await importRsaPssPublicKeySpki(
           algorithm,

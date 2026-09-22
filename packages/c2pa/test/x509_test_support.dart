@@ -48,9 +48,7 @@ Future<C2paSigner> createNativeTestSigner(TestCertificateChain chain) async {
     SigningAlgorithm.ps256,
     chain.leafPrivateKey,
   );
-  return _NativeTestSigner(
-    WebCryptoRsaPssSigningBackend(SigningAlgorithm.ps256, key),
-  );
+  return _NativeTestSigner(RsaPssSigningBackend(SigningAlgorithm.ps256, key));
 }
 
 final class _NativeTestSigner implements C2paSigner {

@@ -141,13 +141,13 @@ Future<bool> _verifyRawSignature(
   return switch (algorithm) {
     SigningAlgorithm.ps256 ||
     SigningAlgorithm.ps384 ||
-    SigningAlgorithm.ps512 => WebCryptoRsaPssVerificationBackend(
+    SigningAlgorithm.ps512 => RsaPssVerificationBackend(
       algorithm,
       await importRsaPssPublicKeySpki(algorithm, publicKeyDer),
     ).verify(algorithm, message, signature),
     SigningAlgorithm.es256 ||
     SigningAlgorithm.es384 ||
-    SigningAlgorithm.es512 => WebCryptoEcdsaVerificationBackend(
+    SigningAlgorithm.es512 => EcdsaVerificationBackend(
       algorithm,
       await importEcdsaPublicKeySpki(algorithm, publicKeyDer),
     ).verify(algorithm, message, signature),

@@ -1,13 +1,16 @@
+import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:cryptography/cryptography.dart' as cryptography;
-import 'package:webcrypto/webcrypto.dart' as webcrypto;
+import 'package:pointycastle/export.dart' as pc;
 
 import 'byte_compare.dart';
 import 'certificate_profile.dart';
 import 'der_reader.dart';
+import 'der_writer.dart';
 import 'ecdsa_signature.dart';
 import 'hash_algorithm.dart';
+import 'key_encoding.dart' as keyenc;
 import 'signing_algorithm.dart';
 import 'x509_certificate.dart';
 
@@ -978,32 +981,17 @@ Future<bool> verifySignatureWithCertificatePublicKey({
       if (!_nullOrAbsentParameters(signatureAlgorithm.parametersDer)) {
         return false;
       }
-      return _verifyRsaPkcs1(
-        certificate,
-        signature,
-        data,
-        webcrypto.Hash.sha256,
-      );
+      return _verifyRsaPkcs1(certificate, signature, data, _HashSpec.sha256);
     case '1.2.840.113549.1.1.12':
       if (!_nullOrAbsentParameters(signatureAlgorithm.parametersDer)) {
         return false;
       }
-      return _verifyRsaPkcs1(
-        certificate,
-        signature,
-        data,
-        webcrypto.Hash.sha384,
-      );
+      return _verifyRsaPkcs1(certificate, signature, data, _HashSpec.sha384);
     case '1.2.840.113549.1.1.13':
       if (!_nullOrAbsentParameters(signatureAlgorithm.parametersDer)) {
         return false;
       }
-      return _verifyRsaPkcs1(
-        certificate,
-        signature,
-        data,
-        webcrypto.Hash.sha512,
-      );
+      return _verifyRsaPkcs1(certificate, signature, data, _HashSpec.sha512);
     case '1.2.840.113549.1.1.10':
       final parameters = _parseCertificatePssParameters(
         signatureAlgorithm.parametersDer,
@@ -1022,17 +1010,17 @@ Future<bool> verifySignatureWithCertificatePublicKey({
       if (signatureAlgorithm.parametersDer != null) {
         return false;
       }
-      return _verifyEcdsa(certificate, signature, data, webcrypto.Hash.sha256);
+      return _verifyEcdsa(certificate, signature, data, _HashSpec.sha256);
     case '1.2.840.10045.4.3.3':
       if (signatureAlgorithm.parametersDer != null) {
         return false;
       }
-      return _verifyEcdsa(certificate, signature, data, webcrypto.Hash.sha384);
+      return _verifyEcdsa(certificate, signature, data, _HashSpec.sha384);
     case '1.2.840.10045.4.3.4':
       if (signatureAlgorithm.parametersDer != null) {
         return false;
       }
-      return _verifyEcdsa(certificate, signature, data, webcrypto.Hash.sha512);
+      return _verifyEcdsa(certificate, signature, data, _HashSpec.sha512);
     case '1.3.101.112':
       if (signatureAlgorithm.parametersDer != null ||
           certificate.subjectPublicKeyAlgorithm.oid != '1.3.101.112' ||
@@ -1062,7 +1050,7 @@ Future<bool> _verifyRsaPkcs1(
   X509Certificate issuer,
   List<int> signature,
   List<int> data,
-  webcrypto.Hash hash,
+  _HashSpec hash,
 ) async {
   if (issuer.subjectPublicKeyAlgorithm.oid != '1.2.840.113549.1.1.1' ||
       !_nullOrAbsentParameters(
@@ -1070,60 +1058,131 @@ Future<bool> _verifyRsaPkcs1(
       )) {
     return false;
   }
-  final key = await webcrypto.RsassaPkcs1V15PublicKey.importSpkiKey(
-    issuer.subjectPublicKeyInfoDer,
-    hash,
-  );
-  return key.verifyBytes(signature, data);
+  final parsed = keyenc.parseRsaPublicKeySpki(issuer.subjectPublicKeyInfoDer);
+  if (parsed == null) {
+    return false;
+  }
+  final key = pc.RSAPublicKey(parsed.modulus, parsed.exponent);
+  final signer = pc.RSASigner(hash.digest(), hash.identifierHex)
+    ..init(false, pc.PublicKeyParameter<pc.RSAPublicKey>(key));
+  try {
+    return signer.verifySignature(
+      Uint8List.fromList(data),
+      pc.RSASignature(Uint8List.fromList(signature)),
+    );
+  } on ArgumentError {
+    return false;
+  }
 }
 
 Future<bool> _verifyRsaPss(
   X509Certificate issuer,
   List<int> signature,
   List<int> data,
-  webcrypto.Hash hash,
+  _HashSpec hash,
   int saltLength,
 ) async {
   if (issuer.subjectPublicKeyAlgorithm.oid != '1.2.840.113549.1.1.1' &&
       issuer.subjectPublicKeyAlgorithm.oid != '1.2.840.113549.1.1.10') {
     return false;
   }
-  final key = await webcrypto.RsaPssPublicKey.importSpkiKey(
-    issuer.subjectPublicKeyInfoDer,
-    hash,
-  );
-  return key.verifyBytes(signature, data, saltLength);
+  final parsed = keyenc.parseRsaPublicKeySpki(issuer.subjectPublicKeyInfoDer);
+  if (parsed == null) {
+    return false;
+  }
+  final key = pc.RSAPublicKey(parsed.modulus, parsed.exponent);
+  final verifier = pc.PSSSigner(pc.RSAEngine(), hash.digest(), hash.digest())
+    ..init(
+      false,
+      pc.ParametersWithSaltConfiguration(
+        pc.PublicKeyParameter<pc.RSAPublicKey>(key),
+        _freshSecureRandom(),
+        saltLength,
+      ),
+    );
+  try {
+    return verifier.verifySignature(
+      Uint8List.fromList(data),
+      pc.PSSSignature(Uint8List.fromList(signature)),
+    );
+  } on ArgumentError {
+    return false;
+  }
 }
 
 Future<bool> _verifyEcdsa(
   X509Certificate issuer,
   List<int> signature,
   List<int> data,
-  webcrypto.Hash hash,
+  _HashSpec hash,
 ) async {
   if (issuer.subjectPublicKeyAlgorithm.oid != '1.2.840.10045.2.1') {
     return false;
   }
   final curveOid = _parameterOid(issuer.subjectPublicKeyAlgorithm);
   final parameters = switch (curveOid) {
-    '1.2.840.10045.3.1.7' => (webcrypto.EllipticCurve.p256, 32),
-    '1.3.132.0.34' => (webcrypto.EllipticCurve.p384, 48),
-    '1.3.132.0.35' => (webcrypto.EllipticCurve.p521, 66),
+    '1.2.840.10045.3.1.7' => (pc.ECCurve_secp256r1(), 32),
+    '1.3.132.0.34' => (pc.ECCurve_secp384r1(), 48),
+    '1.3.132.0.35' => (pc.ECCurve_secp521r1(), 66),
     _ => throw UnsupportedError('Unsupported issuer EC curve: $curveOid'),
   };
   final p1363 = ecdsaDerToP1363(signature, componentLength: parameters.$2);
-  final key = await webcrypto.EcdsaPublicKey.importSpkiKey(
+  final parsedSpki = keyenc.parseEcPublicKeySpki(
     issuer.subjectPublicKeyInfoDer,
-    parameters.$1,
   );
-  return key.verifyBytes(p1363, data, hash);
+  if (parsedSpki == null) {
+    return false;
+  }
+  final point = parameters.$1.curve.decodePoint(parsedSpki.point);
+  if (point == null) {
+    return false;
+  }
+  final key = pc.ECPublicKey(point, parameters.$1);
+  final r = bigIntFromUnsignedBytes(p1363.sublist(0, parameters.$2));
+  final s = bigIntFromUnsignedBytes(p1363.sublist(parameters.$2));
+  final verifier = pc.ECDSASigner(hash.digest())
+    ..init(false, pc.PublicKeyParameter<pc.ECPublicKey>(key));
+  return verifier.verifySignature(
+    Uint8List.fromList(data),
+    pc.ECSignature(r, s),
+  );
+}
+
+pc.SecureRandom _freshSecureRandom() {
+  final random = pc.FortunaRandom();
+  final seedSource = Random();
+  final seed = Uint8List.fromList(
+    List<int>.generate(32, (_) => seedSource.nextInt(256)),
+  );
+  random.seed(pc.KeyParameter(seed));
+  return random;
+}
+
+final class _HashSpec {
+  const _HashSpec(this.digest, this.identifierHex);
+
+  final pc.Digest Function() digest;
+  final String identifierHex;
+
+  static final sha256 = _HashSpec(
+    pc.SHA256Digest.new,
+    '0609608648016503040201',
+  );
+  static final sha384 = _HashSpec(
+    pc.SHA384Digest.new,
+    '0609608648016503040202',
+  );
+  static final sha512 = _HashSpec(
+    pc.SHA512Digest.new,
+    '0609608648016503040203',
+  );
 }
 
 bool _nullOrAbsentParameters(List<int>? parameters) =>
     parameters == null ||
     (parameters.length == 2 && parameters[0] == 0x05 && parameters[1] == 0);
 
-({webcrypto.Hash hash, int saltLength})? _parseCertificatePssParameters(
+({_HashSpec hash, int saltLength})? _parseCertificatePssParameters(
   List<int>? der,
 ) {
   if (der == null) {
@@ -1159,9 +1218,9 @@ bool _nullOrAbsentParameters(List<int>? parameters) =>
       }
     }
     final hash = switch (hashOid) {
-      '2.16.840.1.101.3.4.2.1' => webcrypto.Hash.sha256,
-      '2.16.840.1.101.3.4.2.2' => webcrypto.Hash.sha384,
-      '2.16.840.1.101.3.4.2.3' => webcrypto.Hash.sha512,
+      '2.16.840.1.101.3.4.2.1' => _HashSpec.sha256,
+      '2.16.840.1.101.3.4.2.2' => _HashSpec.sha384,
+      '2.16.840.1.101.3.4.2.3' => _HashSpec.sha512,
       _ => null,
     };
     if (hash == null || mgfHashOid != hashOid || trailerField != 1) {
