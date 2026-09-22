@@ -4,12 +4,28 @@ import 'package:c2pa_io/c2pa_io_vm.dart';
 import 'package:c2pa_io/src/file_byte_io_test_hooks.dart';
 import 'package:test/test.dart';
 
+/// Windows does not allow a file to be deleted while this process still
+/// holds an open handle to it (`dart:io` does not request
+/// `FILE_SHARE_DELETE`), unlike POSIX where an open file can be unlinked out
+/// from under a handle. The tests this guards simulate an external actor
+/// swapping the destination or staging file out from under an in-flight
+/// commit by deleting and recreating it while a handle from this same
+/// process is still open on that exact path; that simulation technique
+/// cannot be set up on Windows. This does not weaken the guarantee being
+/// tested: a real external attacker on Windows is blocked by the very same
+/// OS-level lock, just enforced by the OS instead of by this library's own
+/// tamper detection.
+final String? _skipOnWindows = Platform.isWindows
+    ? 'Windows disallows deleting a file this process still has open, so '
+          'this same-process tamper simulation cannot be set up here.'
+    : null;
+
 void main() {
   late Directory scratch;
 
   setUp(() async {
     scratch = Directory(
-      '.dart_tool/c2pa_io_test-$pid-'
+      '.dart_tool${Platform.pathSeparator}c2pa_io_test-$pid-'
       '${DateTime.now().microsecondsSinceEpoch}',
     );
     await scratch.create(recursive: true);
@@ -21,7 +37,7 @@ void main() {
 
   group('FileByteSource', () {
     test('snapshots length and performs exact concurrent reads', () async {
-      final file = File('${scratch.path}/source.bin');
+      final file = File('${scratch.path}${Platform.pathSeparator}source.bin');
       await file.writeAsBytes([0, 1, 2, 3, 4, 5]);
       final source = await FileByteSource.open(file.path);
       addTearDown(source.close);
@@ -40,7 +56,7 @@ void main() {
     });
 
     test('rejects out-of-bounds reads explicitly', () async {
-      final file = File('${scratch.path}/source.bin');
+      final file = File('${scratch.path}${Platform.pathSeparator}source.bin');
       await file.writeAsBytes([1, 2]);
       final source = await FileByteSource.open(file.path);
       addTearDown(source.close);
@@ -52,7 +68,7 @@ void main() {
     });
 
     test('detects truncation or growth after opening', () async {
-      final file = File('${scratch.path}/source.bin');
+      final file = File('${scratch.path}${Platform.pathSeparator}source.bin');
       await file.writeAsBytes([1, 2, 3, 4]);
       final source = await FileByteSource.open(file.path);
       addTearDown(source.close);
@@ -74,7 +90,7 @@ void main() {
     });
 
     test('has idempotent close and rejects later operations', () async {
-      final file = File('${scratch.path}/source.bin');
+      final file = File('${scratch.path}${Platform.pathSeparator}source.bin');
       await file.writeAsBytes([1]);
       final source = await FileByteSource.open(file.path);
 
@@ -93,7 +109,9 @@ void main() {
 
     test('wraps file open failures in a typed exception', () async {
       await expectLater(
-        FileByteSource.open('${scratch.path}/missing.bin'),
+        FileByteSource.open(
+          '${scratch.path}${Platform.pathSeparator}missing.bin',
+        ),
         throwsA(isA<ByteSourceIoException>()),
       );
     });
@@ -101,7 +119,7 @@ void main() {
 
   group('FileByteSink', () {
     test('stages, patches, truncates, and atomically commits', () async {
-      final target = File('${scratch.path}/target.bin');
+      final target = File('${scratch.path}${Platform.pathSeparator}target.bin');
       await target.writeAsBytes([99, 98]);
       final sink = await FileByteSink.open(target.path);
 
@@ -126,7 +144,7 @@ void main() {
     });
 
     test('can grow by truncation and appends at the new end', () async {
-      final target = File('${scratch.path}/target.bin');
+      final target = File('${scratch.path}${Platform.pathSeparator}target.bin');
       final sink = await FileByteSink.open(target.path);
 
       await sink.append([1]);
@@ -138,7 +156,9 @@ void main() {
     });
 
     test('rejects invalid patches without changing staged length', () async {
-      final sink = await FileByteSink.open('${scratch.path}/target.bin');
+      final sink = await FileByteSink.open(
+        '${scratch.path}${Platform.pathSeparator}target.bin',
+      );
       addTearDown(sink.abort);
       await sink.append([1, 2]);
 
@@ -154,7 +174,7 @@ void main() {
     });
 
     test('abort discards the stage and preserves the destination', () async {
-      final target = File('${scratch.path}/target.bin');
+      final target = File('${scratch.path}${Platform.pathSeparator}target.bin');
       await target.writeAsBytes([7]);
       final sink = await FileByteSink.open(target.path);
       await sink.append([1, 2, 3]);
@@ -174,8 +194,11 @@ void main() {
 
     test(
       'abort leaves a replacement installed after staging ownership',
+      skip: _skipOnWindows,
       () async {
-        final target = File('${scratch.path}/target.bin');
+        final target = File(
+          '${scratch.path}${Platform.pathSeparator}target.bin',
+        );
         late File staging;
         final sink = await FileByteSink.open(
           target.path,
@@ -198,8 +221,11 @@ void main() {
 
     test(
       'commit leaves a replacement installed before staging commit',
+      skip: _skipOnWindows,
       () async {
-        final target = File('${scratch.path}/target.bin');
+        final target = File(
+          '${scratch.path}${Platform.pathSeparator}target.bin',
+        );
         late File staging;
         final sink = await FileByteSink.open(
           target.path,
@@ -223,7 +249,9 @@ void main() {
     test(
       'cleanup leaves a replacement installed at the staging path',
       () async {
-        final target = File('${scratch.path}/target.bin');
+        final target = File(
+          '${scratch.path}${Platform.pathSeparator}target.bin',
+        );
         late File staging;
         final sink = await FileByteSink.open(
           target.path,
@@ -246,8 +274,10 @@ void main() {
     );
 
     test('cleanup does not follow or delete a staging symlink', () async {
-      final target = File('${scratch.path}/target.bin');
-      final symlinkTarget = File('${scratch.path}/symlink-target.bin');
+      final target = File('${scratch.path}${Platform.pathSeparator}target.bin');
+      final symlinkTarget = File(
+        '${scratch.path}${Platform.pathSeparator}symlink-target.bin',
+      );
       await symlinkTarget.writeAsBytes([7, 8]);
       late File staging;
       final sink = await FileByteSink.open(
@@ -272,7 +302,9 @@ void main() {
     test(
       'refuses an existing destination and cleans its staging file',
       () async {
-        final target = File('${scratch.path}/target.bin');
+        final target = File(
+          '${scratch.path}${Platform.pathSeparator}target.bin',
+        );
         await target.writeAsBytes([7]);
         final sink = await FileByteSink.open(target.path, overwrite: false);
         await sink.append([1]);
@@ -286,7 +318,7 @@ void main() {
     );
 
     test('no-clobber commit reserves and writes a new destination', () async {
-      final target = File('${scratch.path}/target.bin');
+      final target = File('${scratch.path}${Platform.pathSeparator}target.bin');
       final sink = await FileByteSink.open(target.path, overwrite: false);
       await sink.append([1, 2, 3]);
 
@@ -301,7 +333,9 @@ void main() {
     test(
       'no-clobber commit loses a deterministic creation race safely',
       () async {
-        final target = File('${scratch.path}/target.bin');
+        final target = File(
+          '${scratch.path}${Platform.pathSeparator}target.bin',
+        );
         final sink = await FileByteSink.open(
           target.path,
           overwrite: false,
@@ -325,7 +359,9 @@ void main() {
     test(
       'replacement file between reservation and open is untouched',
       () async {
-        final target = File('${scratch.path}/target.bin');
+        final target = File(
+          '${scratch.path}${Platform.pathSeparator}target.bin',
+        );
         final sink = await FileByteSink.open(
           target.path,
           overwrite: false,
@@ -347,8 +383,12 @@ void main() {
     test(
       'replacement symlink between reservation and open is not followed',
       () async {
-        final target = File('${scratch.path}/target.bin');
-        final symlinkTarget = File('${scratch.path}/symlink-target.bin');
+        final target = File(
+          '${scratch.path}${Platform.pathSeparator}target.bin',
+        );
+        final symlinkTarget = File(
+          '${scratch.path}${Platform.pathSeparator}symlink-target.bin',
+        );
         await symlinkTarget.writeAsBytes([7, 8]);
         final sink = await FileByteSink.open(
           target.path,
@@ -369,29 +409,38 @@ void main() {
       },
     );
 
-    test('replacement during write is untouched and not deleted', () async {
-      final target = File('${scratch.path}/target.bin');
-      final sink = await FileByteSink.open(
-        target.path,
-        overwrite: false,
-        testHooks: FileByteSinkTestHooks(
-          duringNoClobberWrite: (target) async {
-            await target.delete();
-            await target.writeAsBytes([7, 8]);
-          },
-        ),
-      );
-      await sink.append([1, 2, 3]);
+    test(
+      'replacement during write is untouched and not deleted',
+      skip: _skipOnWindows,
+      () async {
+        final target = File(
+          '${scratch.path}${Platform.pathSeparator}target.bin',
+        );
+        final sink = await FileByteSink.open(
+          target.path,
+          overwrite: false,
+          testHooks: FileByteSinkTestHooks(
+            duringNoClobberWrite: (target) async {
+              await target.delete();
+              await target.writeAsBytes([7, 8]);
+            },
+          ),
+        );
+        await sink.append([1, 2, 3]);
 
-      await expectLater(sink.close(), throwsA(isA<ByteSinkIoException>()));
+        await expectLater(sink.close(), throwsA(isA<ByteSinkIoException>()));
 
-      expect(await target.readAsBytes(), [7, 8]);
-    });
+        expect(await target.readAsBytes(), [7, 8]);
+      },
+    );
 
     test(
       'replacement after destination ownership verification is untouched',
+      skip: _skipOnWindows,
       () async {
-        final target = File('${scratch.path}/target.bin');
+        final target = File(
+          '${scratch.path}${Platform.pathSeparator}target.bin',
+        );
         final sink = await FileByteSink.open(
           target.path,
           overwrite: false,
@@ -413,7 +462,9 @@ void main() {
     test(
       'failed reserved commit leaves placeholder but removes staging',
       () async {
-        final target = File('${scratch.path}/target.bin');
+        final target = File(
+          '${scratch.path}${Platform.pathSeparator}target.bin',
+        );
         final sink = await FileByteSink.open(
           target.path,
           overwrite: false,
@@ -437,7 +488,9 @@ void main() {
 
     test('wraps staging failures in a typed exception', () async {
       await expectLater(
-        FileByteSink.open('${scratch.path}/missing/target.bin'),
+        FileByteSink.open(
+          '${scratch.path}${Platform.pathSeparator}missing/target.bin',
+        ),
         throwsA(isA<ByteSinkIoException>()),
       );
     });

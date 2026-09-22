@@ -1,11 +1,15 @@
 import 'dart:io';
 
-/// Directories with a `test/` suite, in dependency order.
-///
-/// `.` is the workspace root, whose suite covers the repository tooling in
-/// `tool/` rather than any published package.
-const _suites = <String>[
-  '.',
+/// The workspace root's suite, which covers the repository tooling in
+/// `tool/` (including commitlint-backed changelog checks) rather than any
+/// published package. It needs `npm ci` and is Node-version sensitive, so CI
+/// only runs it on one OS; the other suites are pure Dart and run on every
+/// OS in the matrix.
+const _workspaceToolingSuite = '.';
+
+/// Directories with a published package's `test/` suite, in dependency
+/// order.
+const _packageSuites = <String>[
   'packages/c2pa_io',
   'packages/c2pa_codec',
   'packages/c2pa_crypto',
@@ -15,8 +19,16 @@ const _suites = <String>[
   'packages/c2patool_dart',
 ];
 
-Future<void> main() async {
-  for (final suite in _suites) {
+Future<void> main(List<String> args) async {
+  final suites = switch (args) {
+    ['--workspace-only'] => const [_workspaceToolingSuite],
+    ['--packages-only'] => _packageSuites,
+    [] => [_workspaceToolingSuite, ..._packageSuites],
+    _ => throw ArgumentError(
+      'Usage: test_all.dart [--workspace-only|--packages-only]',
+    ),
+  };
+  for (final suite in suites) {
     final testDirectory = Directory('$suite/test');
     if (!testDirectory.existsSync()) {
       continue;
