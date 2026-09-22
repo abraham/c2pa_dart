@@ -46,4 +46,8 @@ for suite in "${SUITES[@]}"; do
 done
 
 log "running ${#SUITES[@]} c2pa_crypto suites on ${platform}"
-exec dart test --platform "${platform}" "${SUITES[@]}"
+# Run suites sequentially (-j 1): pointycastle_backend_test.dart does
+# multiple RSA-PSS key generations, which is CPU-heavy under dart2js and
+# can starve other suites' shared browser event loop long enough to trip
+# package:test's suite-load timeout when run concurrently.
+exec dart test --platform "${platform}" -j 1 "${SUITES[@]}"
