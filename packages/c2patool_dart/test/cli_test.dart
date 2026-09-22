@@ -11,6 +11,22 @@ import 'package:test/test.dart';
 void main() {
   late Directory scratch;
 
+  /// Windows does not allow renaming a path this process still has an open
+  /// read handle on (`dart:io` does not request `FILE_SHARE_DELETE`), unlike
+  /// POSIX where a file can be renamed or unlinked out from under an open
+  /// handle. The tests this guards simulate an attacker swapping an input
+  /// file for another right after the CLI opens it, to verify the CLI keeps
+  /// reading the originally-opened content rather than the substituted
+  /// file. That substitution technique cannot be set up on Windows, but the
+  /// property being tested still holds there: the OS itself blocks the
+  /// swap, so there is nothing for the CLI's own handling to defend
+  /// against.
+  final skipOnWindows = Platform.isWindows
+      ? 'Windows disallows renaming a file this process still has open for '
+            'reading, so this pathname-substitution attack cannot be '
+            'simulated here.'
+      : null;
+
   setUp(() async {
     scratch = Directory('.dart_tool/c2patool-test');
     if (await scratch.exists()) await scratch.delete(recursive: true);
@@ -316,63 +332,71 @@ void main() {
     expect(result.stderr, contains('changed'));
   });
 
-  test('opened FileByteSource is immune to pathname substitution', () async {
-    final asset = File('${scratch.path}/asset.c2pa');
-    final opened = File('${scratch.path}/opened.c2pa');
-    final replacement = File('${scratch.path}/replacement.c2pa');
-    final bytes = await _manifest();
-    await asset.writeAsBytes(bytes);
-    await replacement.writeAsBytes(List<int>.filled(bytes.length + 1, 0));
-    var replaced = false;
-    final result = await C2paCli(
-      onInputOpened: (path) async {
-        if (!replaced && path == asset.path) {
-          replaced = true;
-          await asset.rename(opened.path);
-          await replacement.rename(asset.path);
-        }
-      },
-    ).run(['inspect', '--max-input-bytes', '${bytes.length}', asset.path]);
+  test(
+    'opened FileByteSource is immune to pathname substitution',
+    skip: skipOnWindows,
+    () async {
+      final asset = File('${scratch.path}/asset.c2pa');
+      final opened = File('${scratch.path}/opened.c2pa');
+      final replacement = File('${scratch.path}/replacement.c2pa');
+      final bytes = await _manifest();
+      await asset.writeAsBytes(bytes);
+      await replacement.writeAsBytes(List<int>.filled(bytes.length + 1, 0));
+      var replaced = false;
+      final result = await C2paCli(
+        onInputOpened: (path) async {
+          if (!replaced && path == asset.path) {
+            replaced = true;
+            await asset.rename(opened.path);
+            await replacement.rename(asset.path);
+          }
+        },
+      ).run(['inspect', '--max-input-bytes', '${bytes.length}', asset.path]);
 
-    expect(replaced, isTrue);
-    expect(result.exitCode, CliExitCode.success, reason: result.stderr);
-  });
+      expect(replaced, isTrue);
+      expect(result.exitCode, CliExitCode.success, reason: result.stderr);
+    },
+  );
 
-  test('bounded reads are immune to pathname substitution', () async {
-    final definition = File('${scratch.path}/manifest.json');
-    final opened = File('${scratch.path}/opened.json');
-    final replacement = File('${scratch.path}/replacement.json');
-    final cert = File('${scratch.path}/cert.der');
-    await definition.writeAsString(jsonEncode(_definition()));
-    await replacement.writeAsBytes(const []);
-    await replacement.openWrite().close();
-    final replacementHandle = await replacement.open(mode: FileMode.write);
-    await replacementHandle.truncate(16 * 1024 * 1024 + 1);
-    await replacementHandle.close();
-    await cert.writeAsBytes([1]);
-    var replaced = false;
-    final result =
-        await C2paCli(
-          onInputOpened: (path) async {
-            if (!replaced && path == definition.path) {
-              replaced = true;
-              await definition.rename(opened.path);
-              await replacement.rename(definition.path);
-            }
-          },
-        ).run([
-          'archive-save',
-          '--manifest',
-          definition.path,
-          '--cert',
-          cert.path,
-          '--output',
-          '${scratch.path}/archive.c2pa',
-        ]);
+  test(
+    'bounded reads are immune to pathname substitution',
+    skip: skipOnWindows,
+    () async {
+      final definition = File('${scratch.path}/manifest.json');
+      final opened = File('${scratch.path}/opened.json');
+      final replacement = File('${scratch.path}/replacement.json');
+      final cert = File('${scratch.path}/cert.der');
+      await definition.writeAsString(jsonEncode(_definition()));
+      await replacement.writeAsBytes(const []);
+      await replacement.openWrite().close();
+      final replacementHandle = await replacement.open(mode: FileMode.write);
+      await replacementHandle.truncate(16 * 1024 * 1024 + 1);
+      await replacementHandle.close();
+      await cert.writeAsBytes([1]);
+      var replaced = false;
+      final result =
+          await C2paCli(
+            onInputOpened: (path) async {
+              if (!replaced && path == definition.path) {
+                replaced = true;
+                await definition.rename(opened.path);
+                await replacement.rename(definition.path);
+              }
+            },
+          ).run([
+            'archive-save',
+            '--manifest',
+            definition.path,
+            '--cert',
+            cert.path,
+            '--output',
+            '${scratch.path}/archive.c2pa',
+          ]);
 
-    expect(replaced, isTrue);
-    expect(result.exitCode, CliExitCode.success, reason: result.stderr);
-  });
+      expect(replaced, isTrue);
+      expect(result.exitCode, CliExitCode.success, reason: result.stderr);
+    },
+  );
 
   test('bounded file limits cover every CLI input category', () async {
     final definition = File('${scratch.path}/manifest.json');

@@ -17,10 +17,13 @@ import {join} from 'node:path';
  * this file behind, which would reject the new package's own commits.
  */
 function workspacePackages() {
+  // Normalized because checkouts on Windows runners use CRLF by default,
+  // which would otherwise break the literal '\n' the block regex below
+  // expects immediately after "workspace:".
   const pubspec = readFileSync(
     join(import.meta.dirname, 'pubspec.yaml'),
     'utf8',
-  );
+  ).replace(/\r\n/g, '\n');
 
   // The block runs until the next line that starts in column zero.
   const block = pubspec.match(/^workspace:\n((?:[ \t]+.*\n?)*)/m);
