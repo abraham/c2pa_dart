@@ -1,0 +1,8 @@
+# Vendored conformance fixtures are pinned, byte-for-byte copies of upstream
+# files (see fixtures/vendor/README.md and provenance.json for recorded
+# sizes and SHA-256 digests). Git's default line-ending conversion would
+# rewrite LF to CRLF for anything it guesses is text on a Windows checkout,
+# silently corrupting those pinned bytes and breaking provenance
+# verification. Mark the whole tree binary so every checkout gets the exact
+# bytes regardless of platform.
+packages/c2pa_testkit/test/fixtures/vendor/** -text
