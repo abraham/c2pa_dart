@@ -28,6 +28,19 @@ const List<String> c2paPackages = <String>[
 /// changes to CI, tooling, and documentation belong.
 const String rootScope = 'root';
 
+/// Scopes Dependabot writes itself and that we cannot rename.
+///
+/// Dependabot's `commit-message.include: scope` option only ever appends
+/// `deps` or `deps-dev` (https://docs.github.com/en/code-security/reference/supply-chain-security/dependabot-options-reference#include),
+/// and it applies the same vocabulary by default when it detects a
+/// conventional-commit style in a repository's history, which is what
+/// produces messages like `chore(deps): bump actions/setup-node from 4 to 7`
+/// here. There is no dependabot.yml setting that swaps in a workspace
+/// package or `root` instead, so both words are accepted as scopes and,
+/// like `root`, resolve to no package: a dependency bump reaches the root
+/// changelog alone.
+const List<String> dependabotScopes = <String>['deps', 'deps-dev'];
+
 /// Every scope a commit message may carry.
 ///
 /// Each package may be named in full or, where it has one, by its short form,
@@ -38,6 +51,7 @@ List<String> allowedScopes(Iterable<String> packages) => <String>[
   ...packages,
   ...packages.map(shortScopeFor).whereType<String>(),
   rootScope,
+  ...dependabotScopes,
 ];
 
 /// The short form of [package], or null when it has none.
