@@ -34,7 +34,7 @@ jobs:
           # The merge base with the target branch has to be reachable, which a
           # shallow checkout cannot guarantee.
           fetch-depth: 0
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
@@ -60,7 +60,7 @@ jobs:
       - uses: dart-lang/setup-dart@v1
         with:
           sdk: ${{ env.DART_SDK_VERSION }}
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         # The workspace tooling suite (commitlint-backed changelog checks) is
         # Node-version sensitive and only runs on Linux, so only Linux needs
         # Node set up at all.
