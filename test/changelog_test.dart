@@ -391,9 +391,18 @@ void _scopeAgreementTests() {
       expect(resolveScopeToPackage(rootScope, _packages), isNull);
     });
 
-    test('every allowed scope except root resolves to a package', () {
+    test('dependabot scopes are allowed but route to no package', () {
+      for (final scope in dependabotScopes) {
+        expect(allowedScopes(_packages), contains(scope));
+        expect(resolveScopeToPackage(scope, _packages), isNull);
+      }
+    });
+
+    test('every allowed scope except root and dependabot scopes resolves to '
+        'a package', () {
+      final nonRoutingScopes = <String>{rootScope, ...dependabotScopes};
       for (final scope in allowedScopes(_packages)) {
-        if (scope == rootScope) continue;
+        if (nonRoutingScopes.contains(scope)) continue;
         expect(
           resolveScopeToPackage(scope, _packages),
           isNotNull,
