@@ -24,6 +24,14 @@ feature ledger.
 | [`c2pa_testkit`](https://pub.dev/packages/c2pa_testkit) | Fixtures, mutation/property campaigns, differential testing, and performance harnesses |
 | [`c2patool_dart`](https://pub.dev/packages/c2patool_dart) | Secure VM command-line workflows built only on the public package APIs |
 
+`c2pa` is the main package: most applications should depend on it alone and
+get the rest as transitive dependencies. `c2pa_io`, `c2pa_codec`,
+`c2pa_crypto`, and `c2pa_formats` exist mainly to modularize `c2pa`'s
+internals into independently testable, reusable layers; depend on one of them
+directly only if you need its primitives in isolation. `c2pa_testkit` is a
+testing companion for applications built on `c2pa`, and `c2patool_dart` is a
+separate command-line tool built on the public SDK API.
+
 ### Publication order
 
 Publish packages in dependency order:

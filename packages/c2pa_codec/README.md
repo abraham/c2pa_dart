@@ -29,6 +29,9 @@ legacy data must opt into relaxed options explicitly.
 
 `c2pa_codec` depends on `c2pa_io`. It supplies encoding and container
 primitives to `c2pa_crypto`, `c2pa_formats`, and the high-level `c2pa` SDK.
+It exists mainly to modularize [`c2pa`](https://pub.dev/packages/c2pa)'s
+internals; most applications should depend on `c2pa` directly and reach for
+`c2pa_codec` only when they need these codecs in isolation.
 
 ## Compatibility and limitations
 

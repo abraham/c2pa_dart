@@ -115,9 +115,10 @@ stores, so compressed-manifest support is partial rather than full parity.
 ## Package relationships
 
 The CLI builds on the public APIs of `c2pa`, `c2pa_io`, `c2pa_formats`, and
-`c2pa_crypto`; it does not bypass SDK validation or container handling.
-Applications that need an API rather than a process should depend on `c2pa`
-directly.
+`c2pa_crypto`; it does not bypass SDK validation or container handling. It is
+a separate command-line tool, not a modularized piece of `c2pa`'s internals.
+Applications that need an API rather than a process should depend on
+[`c2pa`](https://pub.dev/packages/c2pa) directly.
 
 ## Compatibility and limitations
 

@@ -4,6 +4,12 @@ The high-level, pure Dart C2PA SDK. It reads and validates manifests, builds
 and signs claims, manages assertions and resources, exports reports, handles
 working archives, and supports CAWG identity workflows.
 
+`c2pa` is the main package in the `c2pa_dart` workspace: most applications
+should depend on it alone. The other packages (`c2pa_io`, `c2pa_codec`,
+`c2pa_crypto`, `c2pa_formats`) exist mainly to modularize `c2pa`'s internals
+into independently testable, reusable layers, and are pulled in
+transitively.
+
 ## Platforms
 
 The public library supports Dart VM, Flutter, and web. Use memory byte sources

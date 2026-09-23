@@ -41,7 +41,10 @@ gate cannot silently stop detecting anything.
 ## Package relationships
 
 `c2pa_testkit` depends on all core sibling packages and is intended for their
-consumers' tests, not production runtime logic. `c2patool_dart` is the
+consumers' tests, not production runtime logic. Unlike `c2pa_io`,
+`c2pa_codec`, `c2pa_crypto`, and `c2pa_formats`, it is not a modularized piece
+of the [`c2pa`](https://pub.dev/packages/c2pa) SDK itself — it is a separate
+testing companion for applications built on `c2pa`. `c2patool_dart` is the
 separate user-facing CLI.
 
 ## Compatibility and limitations

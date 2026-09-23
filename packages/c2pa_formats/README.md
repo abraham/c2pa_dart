@@ -32,7 +32,10 @@ original asset when adopting a mutation workflow and validate the result.
 ## Package relationships
 
 `c2pa_formats` depends on `c2pa_io` and `c2pa_codec`. The high-level `c2pa`
-reader and builder select these handlers automatically.
+reader and builder select these handlers automatically. It exists mainly to
+modularize [`c2pa`](https://pub.dev/packages/c2pa)'s internals; most
+applications should depend on `c2pa` directly and reach for `c2pa_formats`
+only when they need format handling in isolation.
 
 ## Compatibility and limitations
 
