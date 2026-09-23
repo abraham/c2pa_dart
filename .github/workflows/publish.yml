@@ -48,7 +48,7 @@ jobs:
       - name: Install commitlint
         run: npm ci
       - name: Cache pub packages
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ${{ env.PUB_CACHE }}
           key: pub-${{ runner.os }}-dart-${{ env.DART_SDK_VERSION }}-${{ hashFiles('pubspec.lock', '**/pubspec.yaml') }}
