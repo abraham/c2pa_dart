@@ -499,23 +499,33 @@ sibling caret constraint, and every `CHANGELOG.md` in one step; it refuses to
 run if the workspace is not already internally consistent, so a partial bump
 cannot be the starting point for a release.
 
-`scripts/publish.sh` then validates and uploads. It defaults to a dry run
-because publishing is irreversible, and requires an explicit `--publish` to
-upload anything:
+`scripts/publish.sh` validates and, with `--publish`, uploads. It defaults to
+a dry run because publishing is irreversible:
 
 ```sh
 scripts/bump-version.sh 0.1.0-dev.2   # set the version everywhere
 scripts/update-changelogs.sh          # fill in the entries, then edit them
 scripts/publish.sh                    # validate everything, upload nothing
-scripts/publish.sh --publish --tag    # upload in dependency order, then tag
 git commit -m "build: 0.1.0-dev.2"    # marks where the next changelog starts
+git tag -a v0.1.0-dev.2 -m "c2pa_dart 0.1.0-dev.2"
+git push origin main v0.1.0-dev.2     # the pushed tag triggers the release
 ```
 
 It checks that all packages agree on the version, that each has a changelog
-section for it, and that the working tree is clean; publishes in dependency
-order; and waits for each package to become resolvable on pub.dev before
-uploading its dependents. `--from <package>` resumes a partially completed
-release.
+section for it, and that the working tree is clean. Pushing the `v<version>`
+tag triggers [`.github/workflows/publish.yml`](.github/workflows/publish.yml),
+which runs `scripts/publish.sh --publish` on GitHub Actions: it authenticates
+to pub.dev with a short-lived OIDC token (no stored credentials), publishes
+`c2pa_io`, `c2pa_codec`, `c2pa_crypto`, `c2pa_formats`, `c2pa`, `c2pa_testkit`,
+and `c2patool_dart` in that dependency order, and waits for each upload to
+become resolvable on pub.dev before publishing its dependents. Already-published
+versions are skipped, so re-running the workflow resumes a partially completed
+release; it can also be run manually (Actions tab, "Run workflow") to resume
+one without pushing another tag. See [Automated
+publishing](https://dart.dev/tools/pub/automated-publishing) for the one-time
+pub.dev and GitHub setup: every package's Admin page needs automated
+publishing enabled for this repository with tag-pattern `v{{version}}` and
+required environment `pub.dev`.
 
 ## Conformance with c2pa-rs
 
