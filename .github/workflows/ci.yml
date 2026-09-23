@@ -180,7 +180,7 @@ jobs:
         # Kept on success too: the report is the evidence behind the pass, and
         # a diff between two runs is how a regression gets localised.
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: conformance-report
           path: ${{ runner.temp }}/conformance.json
