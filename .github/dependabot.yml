@@ -2,70 +2,15 @@ version: 2
 updates:
   # Root Dart pub workspace and its member packages
   - package-ecosystem: "pub"
-    directory: "/"
-    schedule:
-      interval: "weekly"
-    groups:
-      pub-dependencies:
-        patterns:
-          - "*"
-
-  - package-ecosystem: "pub"
-    directory: "/packages/c2pa"
-    schedule:
-      interval: "weekly"
-    groups:
-      pub-dependencies:
-        patterns:
-          - "*"
-
-  - package-ecosystem: "pub"
-    directory: "/packages/c2pa_io"
-    schedule:
-      interval: "weekly"
-    groups:
-      pub-dependencies:
-        patterns:
-          - "*"
-
-  - package-ecosystem: "pub"
-    directory: "/packages/c2pa_codec"
-    schedule:
-      interval: "weekly"
-    groups:
-      pub-dependencies:
-        patterns:
-          - "*"
-
-  - package-ecosystem: "pub"
-    directory: "/packages/c2pa_crypto"
-    schedule:
-      interval: "weekly"
-    groups:
-      pub-dependencies:
-        patterns:
-          - "*"
-
-  - package-ecosystem: "pub"
-    directory: "/packages/c2pa_formats"
-    schedule:
-      interval: "weekly"
-    groups:
-      pub-dependencies:
-        patterns:
-          - "*"
-
-  - package-ecosystem: "pub"
-    directory: "/packages/c2pa_testkit"
-    schedule:
-      interval: "weekly"
-    groups:
-      pub-dependencies:
-        patterns:
-          - "*"
-
-  - package-ecosystem: "pub"
-    directory: "/packages/c2patool_dart"
+    directories:
+      - "/"
+      - "/packages/c2pa"
+      - "/packages/c2pa_io"
+      - "/packages/c2pa_codec"
+      - "/packages/c2pa_crypto"
+      - "/packages/c2pa_formats"
+      - "/packages/c2pa_testkit"
+      - "/packages/c2patool_dart"
     schedule:
       interval: "weekly"
     groups:
