@@ -398,21 +398,18 @@ void _scopeAgreementTests() {
       }
     });
 
-    test(
-      'every allowed scope except root and dependabot scopes resolves to '
-      'a package',
-      () {
-        final nonRoutingScopes = <String>{rootScope, ...dependabotScopes};
-        for (final scope in allowedScopes(_packages)) {
-          if (nonRoutingScopes.contains(scope)) continue;
-          expect(
-            resolveScopeToPackage(scope, _packages),
-            isNotNull,
-            reason: '"$scope" is accepted but routes nowhere',
-          );
-        }
-      },
-    );
+    test('every allowed scope except root and dependabot scopes resolves to '
+        'a package', () {
+      final nonRoutingScopes = <String>{rootScope, ...dependabotScopes};
+      for (final scope in allowedScopes(_packages)) {
+        if (nonRoutingScopes.contains(scope)) continue;
+        expect(
+          resolveScopeToPackage(scope, _packages),
+          isNotNull,
+          reason: '"$scope" is accepted but routes nowhere',
+        );
+      }
+    });
 
     test('commitlint accepts exactly the scopes that route', () {
       final enumerated = _commitlintScopeEnum();
