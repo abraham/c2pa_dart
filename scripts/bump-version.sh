@@ -90,37 +90,24 @@ log "bumping ${current} -> ${version}"
 for package in "${C2PA_PACKAGES[@]}"; do
   pubspec="${REPO_ROOT}/packages/${package}/pubspec.yaml"
 
+  # Escape the regex metacharacters a semantic version can contain ('.' and
+  # '+') so `current` is matched literally instead of as a pattern.
+  current_re="${current//./\\.}"
+  current_re="${current_re//+/\\+}"
+
   # Anchored so only the package's own version is touched, never a dependency
   # constraint that happens to contain the same string.
-  python3 - "${pubspec}" "${current}" "${version}" <<'PY'
-import re
-import sys
+  version_matches="$(grep -Ec "^version: ${current_re}\$" "${pubspec}")"
+  [ "${version_matches}" -eq 1 ] ||
+    die "${pubspec}: expected one version field, found ${version_matches}"
 
-path, current, version = sys.argv[1], sys.argv[2], sys.argv[3]
-with open(path) as handle:
-    text = handle.read()
-
-updated, count = re.subn(
-    rf'^version: {re.escape(current)}$',
-    f'version: {version}',
-    text,
-    flags=re.MULTILINE,
-)
-if count != 1:
-    raise SystemExit(f'{path}: expected one version field, replaced {count}')
-
-# Sibling constraints only: an unrelated dependency pinned at the same version
-# must not be rewritten.
-updated, _ = re.subn(
-    rf'^(  (?:c2pa|c2pa_[a-z_]+|c2patool_dart): \^){re.escape(current)}$',
-    rf'\g<1>{version}',
-    updated,
-    flags=re.MULTILINE,
-)
-
-with open(path, 'w') as handle:
-    handle.write(updated)
-PY
+  # Sibling constraints only: an unrelated dependency pinned at the same
+  # version must not be rewritten.
+  sed -E -i.bak \
+    -e "s/^version: ${current_re}\$/version: ${version}/" \
+    -e "s/^(  (c2pa|c2pa_[a-z_]+|c2patool_dart): \^)${current_re}\$/\1${version}/" \
+    "${pubspec}"
+  rm -f "${pubspec}.bak"
 
   if [ -n "${write_changelog}" ]; then
     changelog="${REPO_ROOT}/packages/${package}/CHANGELOG.md"
