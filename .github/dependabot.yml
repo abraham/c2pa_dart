@@ -1,0 +1,31 @@
+version: 2
+updates:
+  # Root Dart pub workspace and its member packages
+  - package-ecosystem: "pub"
+    directories:
+      - "/"
+      - "/packages/c2pa"
+      - "/packages/c2pa_io"
+      - "/packages/c2pa_codec"
+      - "/packages/c2pa_crypto"
+      - "/packages/c2pa_formats"
+      - "/packages/c2pa_testkit"
+      - "/packages/c2patool_dart"
+    schedule:
+      interval: "weekly"
+    groups:
+      pub-dependencies:
+        patterns:
+          - "*"
+
+  # npm tooling used for commit message linting
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+
+  # GitHub Actions used in CI/publish workflows
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
