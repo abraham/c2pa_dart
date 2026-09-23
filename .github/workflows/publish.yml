@@ -35,7 +35,7 @@ jobs:
       contents: read
       id-token: write # consumed by `dart pub publish` for OIDC authentication
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Set PUB_CACHE path
         run: echo "PUB_CACHE=${RUNNER_TEMP}/pub-cache" >> "$GITHUB_ENV"
       - uses: dart-lang/setup-dart@v1

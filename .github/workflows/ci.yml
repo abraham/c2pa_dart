@@ -30,7 +30,7 @@ jobs:
       # to bound the range to the commits actually being pushed.
       GITHUB_EVENT_BEFORE: ${{ github.event.before }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # The merge base with the target branch has to be reachable, which a
           # shallow checkout cannot guarantee.
@@ -52,7 +52,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       # jobs.<job_id>.env cannot see the runner context, so PUB_CACHE is
       # derived here instead, where runner.temp is available.
       - name: Set PUB_CACHE path
@@ -108,7 +108,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       # jobs.<job_id>.env cannot see the runner context, so PUB_CACHE is
       # derived here instead, where runner.temp is available.
       - name: Set PUB_CACHE path
@@ -139,7 +139,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Read conformance pins
         id: pins
         run: scripts/conformance-pins.sh
@@ -191,7 +191,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       # jobs.<job_id>.env cannot see the runner context, so PUB_CACHE is
       # derived here instead, where runner.temp is available.
       - name: Set PUB_CACHE path
@@ -217,7 +217,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       # jobs.<job_id>.env cannot see the runner context, so PUB_CACHE is
       # derived here instead, where runner.temp is available.
       - name: Set PUB_CACHE path
