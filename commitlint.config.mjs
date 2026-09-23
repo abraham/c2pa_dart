@@ -68,6 +68,13 @@ const scopes = [
   // Changes to CI, tooling, and documentation belong to no package and reach
   // the root changelog alone.
   'root',
+  // Dependabot's `include: scope` (and its own detection of this repo's
+  // conventional-commit style) only ever writes `deps` or `deps-dev` as the
+  // scope, e.g. `chore(deps): bump actions/setup-node from 4 to 7`. That
+  // vocabulary is not configurable per-repo, so both are accepted here too;
+  // tool/changelog.dart routes them to the root changelog, same as `root`.
+  'deps',
+  'deps-dev',
 ];
 
 export default {
