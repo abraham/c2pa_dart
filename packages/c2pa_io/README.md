@@ -32,7 +32,9 @@ package performs no network access.
 
 `c2pa_io` is the lowest-level workspace package. `c2pa_codec`,
 `c2pa_formats`, `c2pa_crypto`, and `c2pa` build on these byte-source and sink
-interfaces.
+interfaces. It exists mainly to modularize the [`c2pa`](https://pub.dev/packages/c2pa)
+SDK's internals; most applications should depend on `c2pa` directly and reach
+for `c2pa_io` only when they need bounded byte I/O in isolation.
 
 ## Compatibility and limitations
 

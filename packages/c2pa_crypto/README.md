@@ -32,6 +32,9 @@ or external service rather than application memory where practical.
 
 `c2pa_crypto` depends on `c2pa_codec` and `c2pa_io`. The high-level `c2pa`
 package uses it for claim signatures, hard bindings, trust, and revocation.
+It exists mainly to modularize [`c2pa`](https://pub.dev/packages/c2pa)'s
+internals; most applications should depend on `c2pa` directly and reach for
+`c2pa_crypto` only when they need these primitives in isolation.
 
 ## Compatibility and limitations
 
